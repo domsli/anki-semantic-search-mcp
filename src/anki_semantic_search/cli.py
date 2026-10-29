@@ -5,7 +5,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from anki_semantic_search.anki import AnkiError
 from anki_semantic_search.config import Config, load_config
+from anki_semantic_search.index import sync_index
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -38,8 +40,14 @@ def main(argv: list[str] | None = None) -> None:
 
 
 def _sync(config: Config, args: argparse.Namespace) -> None:
-    del config, args
-    raise SystemExit("sync is not implemented yet.")
+    try:
+        stats = sync_index(config, rebuild=args.rebuild)
+    except AnkiError as exc:
+        raise SystemExit(str(exc)) from exc
+    print(
+        f"Indexed {stats.total} notes: embedded {stats.embedded}, "
+        f"updated {stats.updated}, unchanged {stats.unchanged}, removed {stats.removed}."
+    )
 
 
 def _serve(config: Config, args: argparse.Namespace) -> None:
