@@ -8,6 +8,7 @@ from pathlib import Path
 from anki_semantic_search.anki import AnkiError
 from anki_semantic_search.config import Config, load_config
 from anki_semantic_search.index import sync_index
+from anki_semantic_search.server import serve
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -51,8 +52,8 @@ def _sync(config: Config, args: argparse.Namespace) -> None:
 
 
 def _serve(config: Config, args: argparse.Namespace) -> None:
-    del config, args
-    raise SystemExit("serve is not implemented yet.")
+    del args
+    serve(config)
 
 
 if __name__ == "__main__":

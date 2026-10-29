@@ -45,10 +45,17 @@ class FastEmbedEmbedder:
     def embed_passages(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
+        prepared = [passage_input(self.model_name, text) for text in texts]
+        return self._embed(prepared)
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._embed([query_input(self.model_name, text)])[0]
+
+    def _embed(self, texts: list[str]) -> list[list[float]]:
         model = self._load()
         vectors: list[list[float]] = []
         for start in range(0, len(texts), _EMBED_BATCH):
-            chunk = [passage_input(self.model_name, text) for text in texts[start : start + _EMBED_BATCH]]
+            chunk = texts[start : start + _EMBED_BATCH]
             vectors.extend(vector.tolist() for vector in model.embed(chunk))
         return vectors
 
