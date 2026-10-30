@@ -2,60 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Anki search</title>
-    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <header>
-      <div>
-        <h1>Anki search</h1>
-        <p id="anki-state">Checking Anki…</p>
-      </div>
-      <button id="refresh" type="button">Refresh</button>
-    </header>
-    <main>
-      <section>
-        <h2>Decks</h2>
-        <p class="hint">Checked decks are written to config.toml. A name includes its subdecks.</p>
-        <div id="decks"></div>
-      </section>
-      <section>
-        <h2>Fields</h2>
-        <p class="hint">A custom map indexes only the fields you assign. Other note types keep the shared field names.</p>
-        <label>
-          Note type
-          <select id="note-type"></select>
-        </label>
-        <label class="check">
-          <input id="custom-map" type="checkbox" />
-          Use a custom field map for this note type
-        </label>
-        <div id="fields"></div>
-        <h3>Sample passage</h3>
-        <pre id="preview">Open Anki to preview a note.</pre>
-      </section>
-      <section>
-        <h2>Sync</h2>
-        <p id="snapshot">No sync yet.</p>
-        <p id="diff">Live comparison appears when Anki is open.</p>
-        <p id="progress"></p>
-        <div class="row">
-          <button id="compare" type="button">Check sync</button>
-          <button id="sync" type="button">Sync</button>
-          <button id="rebuild" type="button">Rebuild</button>
-          <button id="save" type="button">Save config</button>
-        </div>
-      </section>
-      <section>
-        <h2>MCP server</h2>
-        <p id="server-state">Stopped</p>
-        <p id="server-url"></p>
-        <div class="row">
-          <button id="server-start" type="button">Start</button>
-          <button id="server-stop" type="button">Stop</button>
-        </div>
-      </section>
-    </main>
-    <script src="renderer.js"></script>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
   </body>
 </html>

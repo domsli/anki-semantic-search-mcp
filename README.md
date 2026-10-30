@@ -24,13 +24,15 @@ The default embedding model is `BAAI/bge-m3`. The first sync downloads it. `intf
 
 ## Desktop window
 
-The Electron window edits the same `config.toml`: which decks to index, and a field map for each note type you customize. Note types without a map keep using `[fields]`. It also shows the last sync, compares the index with Anki while Anki is open, and starts or stops the local MCP server.
+The Electron window is a Svelte app. It edits the same `config.toml`: which decks to index, and a field map for each note type you customize. Note types without a map keep using `[fields]`. It also shows the last sync, compares the index with Anki while Anki is open, and starts or stops the local MCP server.
 
 ```powershell
 cd desktop
 npm install
 npm start
 ```
+
+`npm start` builds the Svelte UI, then opens the window. `npm run dev` rebuilds the UI as you edit it.
 
 ## Sync
 

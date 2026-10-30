@@ -9,7 +9,9 @@ body {
   padding: 24px;
 }
 
-header, .row, label.check {
+header,
+.row,
+label.check {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -20,7 +22,9 @@ header {
   margin-bottom: 8px;
 }
 
-h1, h2, h3 {
+h1,
+h2,
+h3 {
   margin: 0 0 8px;
 }
 
@@ -30,18 +34,25 @@ section {
   padding-top: 16px;
 }
 
-.hint, #anki-state, #snapshot, #diff, #progress, #server-state {
+.hint,
+.anki-state,
+.snapshot,
+.diff,
+.progress,
+.server-state {
   margin: 0 0 10px;
 }
 
-.deck, .field {
+.deck,
+.field {
   display: flex;
   justify-content: space-between;
   gap: 12px;
   margin: 6px 0;
 }
 
-select, button {
+select,
+button {
   font: inherit;
 }
 
