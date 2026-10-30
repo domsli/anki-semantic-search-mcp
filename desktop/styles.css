@@ -1,0 +1,57 @@
+:root {
+  color-scheme: light dark;
+  font-family: "Segoe UI", sans-serif;
+  line-height: 1.4;
+}
+
+body {
+  margin: 0;
+  padding: 24px;
+}
+
+header, .row, label.check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+header {
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+h1, h2, h3 {
+  margin: 0 0 8px;
+}
+
+section {
+  border-top: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  margin-top: 20px;
+  padding-top: 16px;
+}
+
+.hint, #anki-state, #snapshot, #diff, #progress, #server-state {
+  margin: 0 0 10px;
+}
+
+.deck, .field {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 6px 0;
+}
+
+select, button {
+  font: inherit;
+}
+
+pre {
+  white-space: pre-wrap;
+  min-height: 4em;
+  padding: 12px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.error {
+  color: #b42318;
+}

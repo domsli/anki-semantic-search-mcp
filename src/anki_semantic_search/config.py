@@ -1,19 +1,26 @@
-"""Load config.toml into a small typed object."""
+"""Load and save config.toml."""
 
 from __future__ import annotations
 
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+
+import tomli_w
+
+_ROLES = ("word", "reading", "definition", "extra", "skip")
 
 
 @dataclass(frozen=True)
 class FieldMap:
-    word: tuple[str, ...]
-    reading: tuple[str, ...]
-    definition: tuple[str, ...]
-    extra: tuple[str, ...]
-    skip: tuple[str, ...]
+    word: tuple[str, ...] = ()
+    reading: tuple[str, ...] = ()
+    definition: tuple[str, ...] = ()
+    extra: tuple[str, ...] = ()
+    skip: tuple[str, ...] = ()
+
+    def as_dict(self) -> dict[str, list[str]]:
+        return {role: list(getattr(self, role)) for role in _ROLES}
 
 
 @dataclass(frozen=True)
@@ -26,18 +33,21 @@ class Config:
     port: int
     data_dir: Path
     fields: FieldMap
+    path: Path | None = None
+    note_types: dict[str, FieldMap] = field(default_factory=dict)
 
 
 def load_config(path: Path) -> Config:
     if not path.is_file():
         example = path.with_name("config.example.toml")
-        hint = f" Copy {example.name} to {path.name} and edit the deck list." if example.is_file() else ""
-        raise SystemExit(f"Config file not found: {path}.{hint}")
+        if example.is_file() and example.resolve() != path.resolve():
+            path.write_bytes(example.read_bytes())
+        else:
+            raise SystemExit(f"Config file not found: {path}.")
 
     with path.open("rb") as handle:
         raw = tomllib.load(handle)
 
-    fields = raw.get("fields") or {}
     decks = tuple(str(name) for name in raw.get("decks") or [])
     if not decks:
         raise SystemExit(f"{path} must list at least one deck under decks.")
@@ -48,6 +58,10 @@ def load_config(path: Path) -> Config:
 
     api_key = raw.get("anki_api_key")
     api_key = str(api_key).strip() if api_key else None
+    note_types = {
+        str(name): field_map_from(roles or {})
+        for name, roles in (raw.get("note_types") or {}).items()
+    }
 
     return Config(
         anki_url=str(raw.get("anki_url", "http://127.0.0.1:8765")).rstrip("/"),
@@ -57,13 +71,44 @@ def load_config(path: Path) -> Config:
         host=str(raw.get("host", "127.0.0.1")),
         port=int(raw.get("port", 8000)),
         data_dir=data_dir,
-        fields=FieldMap(
-            word=_names(fields, "word"),
-            reading=_names(fields, "reading"),
-            definition=_names(fields, "definition"),
-            extra=_names(fields, "extra"),
-            skip=_names(fields, "skip"),
-        ),
+        fields=field_map_from(raw.get("fields") or {}),
+        path=path,
+        note_types=note_types,
+    )
+
+
+def save_settings(
+    path: Path,
+    *,
+    decks: list[str],
+    note_types: dict[str, dict] | None = None,
+) -> Config:
+    """Write decks and note-type maps. Other settings in the file stay put."""
+    chosen = [str(name) for name in decks if str(name).strip()]
+    if not chosen:
+        raise ValueError("Choose at least one deck.")
+    if not path.is_file():
+        raise ValueError(f"Config file not found: {path}.")
+
+    with path.open("rb") as handle:
+        raw = tomllib.load(handle)
+    raw["decks"] = chosen
+    if note_types is not None:
+        raw["note_types"] = {
+            str(name): {role: [str(item) for item in (roles.get(role) or [])] for role in _ROLES}
+            for name, roles in note_types.items()
+        }
+    path.write_text(tomli_w.dumps(raw), encoding="utf-8")
+    return load_config(path)
+
+
+def field_map_from(raw: dict) -> FieldMap:
+    return FieldMap(
+        word=_names(raw, "word"),
+        reading=_names(raw, "reading"),
+        definition=_names(raw, "definition"),
+        extra=_names(raw, "extra"),
+        skip=_names(raw, "skip"),
     )
 
 

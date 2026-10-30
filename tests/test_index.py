@@ -8,7 +8,7 @@ import lancedb
 
 from anki_semantic_search.anki import RawNote
 from anki_semantic_search.config import Config, FieldMap
-from anki_semantic_search.index import TABLE_NAME, sync_index
+from anki_semantic_search.index import TABLE_NAME, diff_index, sync_index
 
 FIELDS = FieldMap(
     word=("Front",),
@@ -137,12 +137,36 @@ class SyncTests(unittest.TestCase):
             self.assertEqual(stats.embedded, 1)
             self.assertEqual(_rows(data_dir)[0]["embedding_model"], "other")
 
+    def test_diff_counts_a_changed_definition_without_rewriting_vectors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            config = _config(data_dir)
+            sync_index(config, notes=[_note(1, "そわそわ", "緊張")], embedder=FakeEmbedder())
+            before = _rows(data_dir)[0]["vector"]
+            report = diff_index(config, notes=[_note(1, "そわそわ", "落ち着かない")])
+            self.assertEqual(report["would_embed"], 1)
+            self.assertEqual(report["examples"]["embed"], ["そわそわ"])
+            self.assertEqual(_rows(data_dir)[0]["vector"], before)
+            self.assertEqual(_rows(data_dir)[0]["definition"], "緊張")
+
+    def test_sync_reports_embed_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            events: list[tuple[int, int]] = []
+            sync_index(
+                _config(Path(tmp)),
+                notes=[_note(1, "猫", "cat"), _note(2, "犬", "dog")],
+                embedder=FakeEmbedder(),
+                on_progress=lambda done, total: events.append((done, total)),
+            )
+            self.assertEqual(events, [(0, 2), (2, 2)])
+
     def test_sync_records_when_the_snapshot_was_taken(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = Path(tmp)
             sync_index(_config(data_dir), notes=[_note(1, "猫", "cat")], embedder=FakeEmbedder())
             meta = json.loads((data_dir / "sync_meta.json").read_text(encoding="utf-8"))
             self.assertEqual(meta["note_count"], 1)
+            self.assertEqual(meta["embedded"], 1)
             self.assertTrue(meta["last_synced_at"])
 
 

@@ -9,7 +9,7 @@ from datetime import datetime
 from html.parser import HTMLParser
 
 from anki_semantic_search.anki import RawNote
-from anki_semantic_search.config import FieldMap
+from anki_semantic_search.config import Config, FieldMap
 
 _SOUND = re.compile(r"\[sound:[^\]]*\]", re.IGNORECASE)
 _CLOZE = re.compile(r"\{\{c\d+::(.*?)(?:::[^}]*)?\}\}", re.DOTALL)
@@ -34,12 +34,20 @@ class NormalizedNote:
     introduced_at: datetime | None
 
 
-def normalize_note(note: RawNote, fields: FieldMap) -> NormalizedNote:
+def normalize_for_config(note: RawNote, config: Config) -> NormalizedNote:
+    """Use a note type's map when one is saved, otherwise the shared name list."""
+    mapped = config.note_types.get(note.model_name)
+    if mapped is not None:
+        return normalize_note(note, mapped, explicit=True)
+    return normalize_note(note, config.fields)
+
+
+def normalize_note(note: RawNote, fields: FieldMap, *, explicit: bool = False) -> NormalizedNote:
     """Map a note's fields onto word, reading, definition, and extra text.
 
-    A field name that matches none of the configured roles is still kept.
-    When neither the word nor the definition matches, the passage is labeled
-    with the original Anki field names so a rename does not drop the text.
+    An explicit map indexes only the fields assigned to a role. The shared
+    fallback list still keeps leftover text, and a note type with no word or
+    definition match is labeled with the original field names.
     """
     cleaned: dict[str, str] = {}
     for name, html in note.fields.items():
@@ -51,6 +59,26 @@ def normalize_note(note: RawNote, fields: FieldMap) -> NormalizedNote:
         cleaned[name] = text
 
     used: set[str] = set()
+    if explicit:
+        word = _take_all(cleaned, fields.word, used)
+        reading = _take_all(cleaned, fields.reading, used)
+        definition = _take_all(cleaned, fields.definition, used)
+        extra = _take_all(cleaned, fields.extra, used)
+        passage = _role_passage(word, reading, definition, extra)
+        return NormalizedNote(
+            note_id=note.note_id,
+            model_name=note.model_name,
+            tags=note.tags,
+            deck_names=note.deck_names,
+            word=word,
+            reading=reading,
+            definition=definition,
+            extra=extra,
+            passage=passage,
+            added_at=note.added_at,
+            introduced_at=note.introduced_at,
+        )
+
     word = _take(cleaned, fields.word, used)
     reading = _take(cleaned, fields.reading, used)
     definition = _take(cleaned, fields.definition, used)
@@ -149,6 +177,17 @@ def _role_passage(word: str, reading: str, definition: str, extra: str) -> str:
     if extra:
         lines.append(f"Extra: {extra}")
     return "\n".join(lines)
+
+
+def _take_all(cleaned: dict[str, str], names: tuple[str, ...], used: set[str]) -> str:
+    parts: list[str] = []
+    for name in names:
+        for field_name, text in cleaned.items():
+            if field_name.lower() == name.lower() and field_name not in used:
+                used.add(field_name)
+                parts.append(text)
+                break
+    return "\n".join(parts)
 
 
 def _take(cleaned: dict[str, str], names: tuple[str, ...], used: set[str]) -> str:

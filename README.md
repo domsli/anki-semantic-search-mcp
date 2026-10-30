@@ -13,15 +13,24 @@ Install the [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on, th
 ```powershell
 py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
-copy config.example.toml config.toml
 ```
 
-Edit `config.toml`:
+`config.toml` is already filled in from `config.example.toml`. Edit it if your deck name is not `Japanese`:
 
 - `decks` lists the decks to index. A name matches that deck and its subdecks.
 - `[fields]` maps your note type onto the word and the definition. The first matching field name wins. Other text fields are still indexed. Audio, images, and URL-only fields are skipped.
 
 The default embedding model is `BAAI/bge-m3`. The first sync downloads it. `intfloat/multilingual-e5-base` is the smaller option in the config file.
+
+## Desktop window
+
+The Electron window edits the same `config.toml`: which decks to index, and a field map for each note type you customize. Note types without a map keep using `[fields]`. It also shows the last sync, compares the index with Anki while Anki is open, and starts or stops the local MCP server.
+
+```powershell
+cd desktop
+npm install
+npm start
+```
 
 ## Sync
 

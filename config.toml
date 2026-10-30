@@ -1,0 +1,31 @@
+# Default config. The CLI and the desktop window both use this file.
+
+anki_url = "http://127.0.0.1:8765"
+# anki_api_key = ""
+
+# Deck names exactly as Anki shows them. Subdecks are included when the
+# sync query uses `deck:Name`, which matches that deck and its children.
+decks = ["Japanese"]
+
+# BAAI/bge-m3 matches an English question to a Japanese definition.
+# intfloat/multilingual-e5-base is smaller and faster, and needs query/passage prefixes.
+embedding_model = "BAAI/bge-m3"
+
+host = "127.0.0.1"
+port = 8000
+data_dir = "data"
+
+# First matching field name on a note wins. Names are compared case-insensitively.
+[fields]
+word = ["Expression", "Word", "Vocab", "Front", "Japanese"]
+reading = ["Reading", "Kana", "Yomikata"]
+definition = ["Meaning", "Definition", "Glossary", "Back", "English"]
+extra = ["Example", "Sentence", "Notes"]
+skip = ["Audio", "Image", "Images", "Sound", "Video"]
+
+# Optional. A note type listed here uses only these fields. Note types that
+# are absent keep using the shared names above, including leftover text.
+# [note_types.Basic]
+# word = ["Front"]
+# definition = ["Back"]
+# skip = ["Audio"]

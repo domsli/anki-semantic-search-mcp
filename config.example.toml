@@ -1,4 +1,4 @@
-# Copy to config.toml and set the decks you want to index.
+# Template for config.toml. A missing config.toml is created from this file.
 # Anki must be open with AnkiConnect for `anki-search sync`.
 
 anki_url = "http://127.0.0.1:8765"
@@ -23,3 +23,10 @@ reading = ["Reading", "Kana", "Yomikata"]
 definition = ["Meaning", "Definition", "Glossary", "Back", "English"]
 extra = ["Example", "Sentence", "Notes"]
 skip = ["Audio", "Image", "Images", "Sound", "Video"]
+
+# Optional. A note type listed here uses only these fields. Note types that
+# are absent keep using the shared names above, including leftover text.
+# [note_types.Basic]
+# word = ["Front"]
+# definition = ["Back"]
+# skip = ["Audio"]

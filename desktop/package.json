@@ -1,0 +1,13 @@
+{
+  "name": "anki-semantic-search-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Configure Anki field maps, sync the local index, and start the MCP server.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.4.11"
+  }
+}

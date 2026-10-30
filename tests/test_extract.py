@@ -1,12 +1,13 @@
 import json
 import unittest
 from datetime import datetime, timezone
+from pathlib import Path
 
 import httpx
 
 from anki_semantic_search.anki import AnkiClient, AnkiError, RawNote, deck_query
-from anki_semantic_search.config import FieldMap
-from anki_semantic_search.normalize import content_hash, html_to_text, normalize_note
+from anki_semantic_search.config import Config, FieldMap
+from anki_semantic_search.normalize import content_hash, html_to_text, normalize_for_config, normalize_note
 
 FIELDS = FieldMap(
     word=("Expression", "Word", "Front"),
@@ -79,6 +80,31 @@ class NormalizeTests(unittest.TestCase):
 
     def test_hash_changes_when_the_model_changes(self) -> None:
         self.assertNotEqual(content_hash("Word: 語", "BAAI/bge-m3"), content_hash("Word: 語", "other"))
+
+    def test_explicit_map_drops_unassigned_fields(self) -> None:
+        mapped = FieldMap(word=("Front",), definition=("Back",), skip=("Audio",))
+        note = normalize_note(
+            _note(Front="語", Back="意味", Gloss="余分", Audio="clip"),
+            mapped,
+            explicit=True,
+        )
+        self.assertEqual(note.passage, "Word: 語\nDefinition: 意味")
+        self.assertNotIn("余分", note.passage)
+
+    def test_unmapped_note_type_uses_the_fallback_list(self) -> None:
+        config = Config(
+            anki_url="http://127.0.0.1:8765",
+            anki_api_key=None,
+            decks=("Japanese",),
+            embedding_model="fake",
+            host="127.0.0.1",
+            port=8000,
+            data_dir=Path("."),
+            fields=FIELDS,
+            note_types={"Other": FieldMap(word=("Front",), definition=("Back",))},
+        )
+        note = normalize_for_config(_note(Front="語", Gloss="緊張"), config)
+        self.assertIn("緊張", note.passage)
 
 
 class AnkiClientTests(unittest.TestCase):

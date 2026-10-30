@@ -8,6 +8,7 @@ dependencies = [
     "fastmcp>=2.11",
     "httpx>=0.28",
     "lancedb>=0.24",
+    "tomli-w>=1.1",
 ]
 
 [project.scripts]

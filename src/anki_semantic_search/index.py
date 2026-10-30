@@ -5,14 +5,15 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Protocol, Sequence
+from collections.abc import Callable, Sequence
+from typing import Protocol
 
 import lancedb
 from lancedb.index import FTS, IvfFlat
 
 from anki_semantic_search.anki import AnkiClient, RawNote
 from anki_semantic_search.config import Config
-from anki_semantic_search.normalize import NormalizedNote, content_hash, normalize_note
+from anki_semantic_search.normalize import NormalizedNote, content_hash, normalize_for_config
 
 TABLE_NAME = "notes"
 _META_NAME = "sync_meta.json"
@@ -79,12 +80,35 @@ def query_input(model_name: str, text: str) -> str:
     return text
 
 
+def diff_index(config: Config, notes: Sequence[RawNote] | None = None) -> dict:
+    """Compare Anki with the index without embedding or writing."""
+    if notes is None:
+        with AnkiClient(config.anki_url, config.anki_api_key) as client:
+            notes = client.fetch_notes(config.decks)
+    prepared = _prepare(config, notes)
+    existing = _read_existing(_connect(config.data_dir)) if config.data_dir.is_dir() else {}
+    classified = _classify(prepared, existing, config.embedding_model, _model_changed(existing, config.embedding_model))
+    return {
+        "ok": True,
+        "would_embed": len(classified.embed),
+        "would_update": len(classified.update),
+        "unchanged": classified.unchanged,
+        "would_remove": len(classified.remove_ids),
+        "examples": {
+            "embed": [_example(note) for note, _digest in classified.embed[:5]],
+            "update": [_example(note) for note in classified.update[:5]],
+            "remove": classified.remove_words[:5],
+        },
+    }
+
+
 def sync_index(
     config: Config,
     *,
     rebuild: bool = False,
     notes: Sequence[RawNote] | None = None,
     embedder: Embedder | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> SyncStats:
     """Refresh the on-disk index from Anki notes.
 
@@ -96,44 +120,36 @@ def sync_index(
         with AnkiClient(config.anki_url, config.anki_api_key) as client:
             notes = client.fetch_notes(config.decks)
     embedder = embedder or FastEmbedEmbedder(config.embedding_model)
-    prepared = [note for note in (normalize_note(raw, config.fields) for raw in notes) if note.passage]
+    prepared = _prepare(config, notes)
 
     config.data_dir.mkdir(parents=True, exist_ok=True)
     db = lancedb.connect(str(config.data_dir))
     existing = _read_existing(db)
-    model_changed = bool(existing) and any(
-        row["embedding_model"] != embedder.model_name for row in existing.values()
-    )
-    full_rewrite = rebuild or model_changed
+    full_rewrite = rebuild or _model_changed(existing, embedder.model_name)
+    classified = _classify(prepared, existing, embedder.model_name, full_rewrite)
 
-    embedded_notes: list[tuple[NormalizedNote, str]] = []
-    reused_rows: list[dict] = []
-    unchanged = 0
-    desired_ids: set[int] = set()
-
-    for note in prepared:
-        desired_ids.add(note.note_id)
-        digest = content_hash(note.passage, embedder.model_name)
-        previous = existing.get(note.note_id)
-        if (
-            not full_rewrite
-            and previous is not None
-            and previous["content_hash"] == digest
-            and previous["embedding_model"] == embedder.model_name
-        ):
-            if _metadata(note) == _stored_metadata(previous):
-                unchanged += 1
-            else:
-                reused_rows.append(_row(note, _as_floats(previous["vector"]), embedder.model_name, digest))
-            continue
-        embedded_notes.append((note, digest))
-
-    vectors = embedder.embed_passages([note.passage for note, _digest in embedded_notes])
+    total_embed = len(classified.embed)
+    if on_progress:
+        on_progress(0, total_embed)
+    vectors: list[list[float]] = []
+    passages = [note.passage for note, _digest in classified.embed]
+    done = 0
+    while done < total_embed:
+        chunk = passages[done : done + _EMBED_BATCH]
+        vectors.extend(embedder.embed_passages(chunk))
+        done += len(chunk)
+        if on_progress:
+            on_progress(done, total_embed)
     fresh_rows = [
         _row(note, vector, embedder.model_name, digest)
-        for (note, digest), vector in zip(embedded_notes, vectors, strict=True)
+        for (note, digest), vector in zip(classified.embed, vectors, strict=True)
     ]
-    stale_ids = [note_id for note_id in existing if note_id not in desired_ids]
+    reused_rows = [
+        _row(note, vector, embedder.model_name, content_hash(note.passage, embedder.model_name))
+        for note, vector in zip(classified.update, classified.update_vectors, strict=True)
+    ]
+    unchanged = classified.unchanged
+    stale_ids = classified.remove_ids
     wrote_text = bool(fresh_rows) or bool(stale_ids) or full_rewrite
 
     if full_rewrite or not _has_table(db):
@@ -156,14 +172,76 @@ def sync_index(
         _ensure_indexes(table)
 
     total = 0 if table is None else table.count_rows()
-    _write_meta(config, embedder.model_name, total)
-    return SyncStats(
+    stats = SyncStats(
         total=total,
         embedded=len(fresh_rows),
         updated=len(reused_rows),
         unchanged=unchanged,
         removed=len(stale_ids),
     )
+    _write_meta(config, embedder.model_name, stats)
+    return stats
+
+
+@dataclass
+class _Classified:
+    embed: list[tuple[NormalizedNote, str]]
+    update: list[NormalizedNote]
+    update_vectors: list[list[float]]
+    unchanged: int
+    remove_ids: list[int]
+    remove_words: list[str]
+
+
+def _prepare(config: Config, notes: Sequence[RawNote]) -> list[NormalizedNote]:
+    return [note for note in (normalize_for_config(raw, config) for raw in notes) if note.passage]
+
+
+def _connect(data_dir):
+    if not data_dir.is_dir():
+        return None
+    return lancedb.connect(str(data_dir))
+
+
+def _model_changed(existing: dict[int, dict], model_name: str) -> bool:
+    return bool(existing) and any(row["embedding_model"] != model_name for row in existing.values())
+
+
+def _classify(
+    prepared: list[NormalizedNote],
+    existing: dict[int, dict],
+    model_name: str,
+    full_rewrite: bool,
+) -> _Classified:
+    embed: list[tuple[NormalizedNote, str]] = []
+    update: list[NormalizedNote] = []
+    update_vectors: list[list[float]] = []
+    unchanged = 0
+    desired_ids: set[int] = set()
+    for note in prepared:
+        desired_ids.add(note.note_id)
+        digest = content_hash(note.passage, model_name)
+        previous = existing.get(note.note_id)
+        if (
+            not full_rewrite
+            and previous is not None
+            and previous["content_hash"] == digest
+            and previous["embedding_model"] == model_name
+        ):
+            if _metadata(note) == _stored_metadata(previous):
+                unchanged += 1
+            else:
+                update.append(note)
+                update_vectors.append(_as_floats(previous["vector"]))
+            continue
+        embed.append((note, digest))
+    remove_ids = [note_id for note_id in existing if note_id not in desired_ids]
+    remove_words = [str(existing[note_id].get("word") or "") for note_id in remove_ids[:5]]
+    return _Classified(embed, update, update_vectors, unchanged, remove_ids, remove_words)
+
+
+def _example(note: NormalizedNote) -> str:
+    return note.word or note.definition or note.passage.splitlines()[0]
 
 
 def _has_table(db: lancedb.DBConnection) -> bool:
@@ -253,10 +331,14 @@ def _uses_e5_prefix(model_name: str) -> bool:
     return "e5" in model_name.lower()
 
 
-def _write_meta(config: Config, model_name: str, total: int) -> None:
+def _write_meta(config: Config, model_name: str, stats: SyncStats) -> None:
     payload = {
         "last_synced_at": _iso(datetime.now(timezone.utc)),
         "embedding_model": model_name,
-        "note_count": total,
+        "note_count": stats.total,
+        "embedded": stats.embedded,
+        "updated": stats.updated,
+        "unchanged": stats.unchanged,
+        "removed": stats.removed,
     }
     (config.data_dir / _META_NAME).write_text(json.dumps(payload), encoding="utf-8")

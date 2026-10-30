@@ -129,6 +129,39 @@ class AnkiClient:
             )
         return notes
 
+    def deck_names(self) -> list[str]:
+        return [str(name) for name in self.invoke("deckNames") or []]
+
+    def note_types(self) -> list[dict[str, Any]]:
+        names = [str(name) for name in self.invoke("modelNames") or []]
+        types: list[dict[str, Any]] = []
+        for name in names:
+            fields = [str(field) for field in self.invoke("modelFieldNames", modelName=name) or []]
+            types.append({"name": name, "fields": fields})
+        return types
+
+    def sample_note(self, model_name: str, decks: tuple[str, ...] | list[str]) -> RawNote | None:
+        query = f'note:"{_escape_query(model_name)}"'
+        if decks:
+            query = f"{deck_query(decks)} {query}"
+        note_ids = [int(note_id) for note_id in self.invoke("findNotes", query=query) or []]
+        if not note_ids:
+            return None
+        info = (self.invoke("notesInfo", notes=[note_ids[0]]) or [None])[0]
+        if not info:
+            return None
+        fields = {str(name): _field_value(raw) for name, raw in (info.get("fields") or {}).items()}
+        return RawNote(
+            note_id=int(info["noteId"]),
+            model_name=str(info.get("modelName") or model_name),
+            tags=tuple(str(tag) for tag in info.get("tags") or []),
+            fields=fields,
+            deck_names=(),
+            card_ids=tuple(int(card_id) for card_id in info.get("cards") or []),
+            added_at=_from_anki_ms(int(info["noteId"])),
+            introduced_at=None,
+        )
+
 
 def deck_query(decks: tuple[str, ...] | list[str]) -> str:
     parts = [f'deck:"{_escape_query(name)}"' for name in decks]
