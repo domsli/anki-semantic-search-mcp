@@ -1,56 +1,23 @@
 # Anki Semantic Search
 
-Search Japanese Anki notes by meaning, then let ChatGPT answer from the matches. The deck and the vectors stay on this machine. ChatGPT only receives the notes the search tool returns.
+This is a local MCP server for your Japanese Anki deck. You ask ChatGPT something like "what's a word I recently learned that means feeling nervous," and it looks the word up in your cards instead of guessing.
 
-An input card is one row: the Japanese word on the front, and a definition in Japanese or English on the back. An English question such as "feeling nervous" is embedded with the same local model as those definitions, and the closest notes come back.
+An input card is one word: Japanese on the front, and a definition in Japanese or English on the back. The server embeds that word and definition on your machine. ChatGPT only receives the closest matches. The deck and the vectors stay local.
 
-Reopening Anki does not update the index. `anki-search sync` takes a snapshot while Anki is open. Search keeps working after Anki is closed.
+Reopening Anki does not refresh the index. Sync from the desktop window while Anki is open. Search keeps working after you close Anki.
 
-## Setup
-
-Install the [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on, then open Anki.
-
-```powershell
-py -3 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e .
-```
-
-`config.toml` is already filled in from `config.example.toml`. Edit it if your deck name is not `Japanese`:
-
-- `decks` lists the decks to index. A name matches that deck and its subdecks.
-- `[fields]` maps your note type onto the word and the definition. The first matching field name wins. Other text fields are still indexed. Audio, images, and URL-only fields are skipped.
-
-The default embedding model is `BAAI/bge-m3`. The first sync downloads it. `intfloat/multilingual-e5-base` is the smaller option in the config file.
+To install the app and work on it, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Desktop window
 
-The Electron window is a Svelte app. It edits the same `config.toml`: which decks to index, and a field map for each note type you customize. Note types without a map keep using `[fields]`. It also shows the last sync, compares the index with Anki while Anki is open, and starts or stops the local MCP server.
+Install the [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on and open Anki, then open the desktop window.
 
-```powershell
-cd desktop
-npm install
-npm start
-```
+- **Decks.** Check the decks to search. A checked name includes its subdecks. Save writes those names into `config.toml`.
+- **Fields.** Pick a note type and, if you want, assign each field a role: word, reading, definition, extra, or skip. A note type without a custom map uses the shared field names in `config.toml`. The sample passage shows the text that will be embedded.
+- **Sync.** Check sync compares the index with Anki. Sync updates the index. Rebuild re-embeds every note. The window shows when the index was last taken.
+- **MCP server.** Start leaves a local server running for ChatGPT. Stop shuts down the server this window started. The address is `http://127.0.0.1:8000/mcp`.
 
-`npm start` builds the Svelte UI, then opens the window. `npm run dev` rebuilds the UI as you edit it.
-
-## Sync
-
-With Anki open:
-
-```powershell
-.\.venv\Scripts\anki-search.exe sync
-```
-
-A later sync re-embeds a note only when its word, definition, or embedding model changed. `--rebuild` re-embeds every note. `list_decks` reports `last_synced_at`.
-
-## Serve
-
-```powershell
-.\.venv\Scripts\anki-search.exe serve
-```
-
-This listens on `http://127.0.0.1:8000/mcp` and refuses any other host. Leave this process running while you use ChatGPT.
+Field editing, the live comparison, and Sync need Anki open. The server can stay up after Anki is closed.
 
 ## Connect ChatGPT
 
