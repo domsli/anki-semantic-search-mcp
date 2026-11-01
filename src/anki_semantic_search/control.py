@@ -68,7 +68,7 @@ def list_note_types(config: Config) -> dict:
 def preview_note(config: Config, payload: dict) -> dict:
     note_type = str(payload.get("note_type") or "")
     if not note_type:
-        return {"ok": False, "error": "Choose a note type to preview."}
+        return {"ok": False, "error": "Choose a card type first."}
     decks = config.decks if payload.get("decks") is None else payload.get("decks")
     try:
         with AnkiClient(config.anki_url, config.anki_api_key) as client:
@@ -76,7 +76,7 @@ def preview_note(config: Config, payload: dict) -> dict:
     except AnkiError as exc:
         return {"ok": False, "error": str(exc)}
     if note is None:
-        return {"ok": True, "passage": "", "message": "No notes of this type in the selected decks."}
+        return {"ok": True, "passage": "", "message": "None of these cards are in the decks you chose."}
     roles = payload.get("roles")
     if roles is None:
         normalized = normalize_for_config(note, config)
@@ -93,7 +93,7 @@ def preview_note(config: Config, payload: dict) -> dict:
 def save(config: Config, payload: dict) -> dict:
     path = config.path
     if path is None:
-        return {"ok": False, "error": "This config was not loaded from a file."}
+        return {"ok": False, "error": "Couldn't save your settings."}
     try:
         updated = save_settings(path, decks=list(payload.get("decks") or []), note_types=payload.get("note_types"))
     except ValueError as exc:

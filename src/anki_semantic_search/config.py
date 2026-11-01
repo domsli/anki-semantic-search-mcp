@@ -88,7 +88,7 @@ def save_settings(
     if not chosen:
         raise ValueError("Choose at least one deck.")
     if not path.is_file():
-        raise ValueError(f"Config file not found: {path}.")
+        raise ValueError("Couldn't find your settings.")
 
     with path.open("rb") as handle:
         raw = tomllib.load(handle)

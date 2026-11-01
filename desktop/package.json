@@ -2,7 +2,7 @@
   "name": "anki-semantic-search-desktop",
   "private": true,
   "version": "0.1.0",
-  "description": "Configure Anki field maps, sync the local index, and start the MCP server.",
+  "description": "Choose which Anki decks and card fields to search, and let ChatGPT look them up.",
   "main": "main.js",
   "scripts": {
     "build": "vite build",

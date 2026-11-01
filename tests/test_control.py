@@ -54,6 +54,18 @@ class SaveSettingsTests(unittest.TestCase):
             self.assertEqual(loaded.note_types["Basic"].skip, ("Audio",))
             self.assertEqual(loaded.fields.definition, ("Back",))
 
+    def test_japanese_deck_names_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            path.write_text(
+                'anki_url = "http://127.0.0.1:8765"\ndecks = ["Japanese"]\nembedding_model = "BAAI/bge-m3"\n',
+                encoding="utf-8",
+            )
+            save_settings(path, decks=["日本語", "日本語::単語"])
+            loaded = load_config(path)
+            self.assertEqual(loaded.decks, ("日本語", "日本語::単語"))
+            self.assertIn("日本語::単語", path.read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()

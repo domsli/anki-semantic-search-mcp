@@ -19,7 +19,13 @@ label.check {
 
 header {
   justify-content: space-between;
+  align-items: flex-start;
   margin-bottom: 8px;
+}
+
+.lede {
+  max-width: 40rem;
+  margin: 0 0 8px;
 }
 
 h1,
@@ -54,6 +60,10 @@ section {
 select,
 button {
   font: inherit;
+}
+
+button.primary {
+  font-weight: 650;
 }
 
 pre {

@@ -12,12 +12,12 @@ To install the app and work on it, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Install the [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on and open Anki, then open the desktop window.
 
-- **Decks.** Check the decks to search. A checked name includes its subdecks. Save writes those names into `config.toml`.
-- **Fields.** Pick a note type and, if you want, assign each field a role: word, reading, definition, extra, or skip. A note type without a custom map uses the shared field names in `config.toml`. The sample passage shows the text that will be embedded.
-- **Sync.** Check sync compares the index with Anki. Sync updates the index. Rebuild re-embeds every note. The window shows when the index was last taken.
-- **MCP server.** Start leaves a local server running for ChatGPT. Stop shuts down the server this window started. The address is `http://127.0.0.1:8000/mcp`.
+The window does four things, in order:
 
-Field editing, the live comparison, and Sync need Anki open. The server can stay up after Anki is closed.
+1. **Choose decks.** A checked deck is included, including decks inside it. An unchecked deck is left out. The check waits until you update search.
+2. **Mark the word and the definition.** Optional. Say which box is the word and which is the definition. Card types you leave alone still match usual names such as Front, Expression, or Meaning.
+3. **Update search.** This is the button that applies the checks and reads Anki. Anki needs to be open. See what changed previews that update. Update everything rereads every card. Save without updating remembers the checks for later.
+4. **Turn on ChatGPT.** Start after search is updated. The address is `http://127.0.0.1:8000/mcp`. ChatGPT can keep searching after you close Anki, as long as this stays on.
 
 ## Connect ChatGPT
 

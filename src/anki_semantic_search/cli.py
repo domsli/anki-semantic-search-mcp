@@ -15,6 +15,7 @@ from anki_semantic_search.server import serve
 
 
 def main(argv: list[str] | None = None) -> None:
+    _use_utf8_stdio()
     parser = argparse.ArgumentParser(
         prog="anki-search",
         description="Index Anki notes locally and serve them to ChatGPT over MCP.",
@@ -135,8 +136,20 @@ def _save(config: Config, args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
 
+def _use_utf8_stdio() -> None:
+    """Keep Japanese deck names intact on Windows, where pipes default to a legacy code page."""
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="strict")
+        except (OSError, ValueError):
+            continue
+
+
 def _stdin_json() -> dict:
-    raw = sys.stdin.read()
+    raw = _read_stdin()
     if not raw.strip():
         return {}
     try:
@@ -150,8 +163,21 @@ def _stdin_json() -> dict:
     return payload
 
 
+def _read_stdin() -> str:
+    buffer = getattr(sys.stdin, "buffer", None)
+    if buffer is None:
+        return sys.stdin.read()
+    return buffer.read().decode("utf-8")
+
+
 def _emit(payload: dict) -> None:
-    print(json.dumps(payload, ensure_ascii=False), flush=True)
+    line = (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
+    buffer = getattr(sys.stdout, "buffer", None)
+    if buffer is None:
+        print(line.decode("utf-8"), end="", flush=True)
+        return
+    buffer.write(line)
+    buffer.flush()
 
 
 if __name__ == "__main__":

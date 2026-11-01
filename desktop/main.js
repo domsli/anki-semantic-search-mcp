@@ -9,12 +9,18 @@ const configPath = path.join(root, "config.toml");
 const python = process.platform === "win32"
   ? path.join(root, ".venv", "Scripts", "python.exe")
   : path.join(root, ".venv", "bin", "python");
+const pythonEnv = {
+  ...process.env,
+  PYTHONIOENCODING: "utf-8",
+  PYTHONUTF8: "1",
+};
 
 let mainWindow = null;
 let serverChild = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
+    title: "Search your cards",
     width: 980,
     height: 820,
     webPreferences: {
@@ -32,23 +38,32 @@ function pythonMissing() {
   return !fs.existsSync(python);
 }
 
+function spawnPython(args) {
+  const child = spawn(python, ["-m", "anki_semantic_search.cli", "--config", configPath, ...args], {
+    cwd: root,
+    windowsHide: true,
+    env: pythonEnv,
+  });
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdin.setDefaultEncoding("utf8");
+  return child;
+}
+
 function runCli(args, input) {
   return new Promise((resolve) => {
     if (pythonMissing()) {
       resolve({ code: 1, lines: [], raw: "", error: `Python was not found at ${python}` });
       return;
     }
-    const child = spawn(python, ["-m", "anki_semantic_search.cli", "--config", configPath, ...args], {
-      cwd: root,
-      windowsHide: true,
-    });
+    const child = spawnPython(args);
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
+      stdout += chunk;
     });
     child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
+      stderr += chunk;
     });
     child.on("error", (error) => {
       resolve({ code: 1, lines: [], raw: "", error: error.message });
@@ -108,15 +123,12 @@ ipcMain.handle("sync", async (event, { rebuild }) => {
   if (rebuild) args.push("--rebuild");
   if (pythonMissing()) return { ok: false, error: `Python was not found at ${python}` };
   return new Promise((resolve) => {
-    const child = spawn(python, ["-m", "anki_semantic_search.cli", "--config", configPath, ...args], {
-      cwd: root,
-      windowsHide: true,
-    });
+    const child = spawnPython(args);
     let buffer = "";
     let stderr = "";
     let final = null;
     child.stdout.on("data", (chunk) => {
-      buffer += chunk.toString();
+      buffer += chunk;
       const parts = buffer.split(/\r?\n/);
       buffer = parts.pop() || "";
       for (const line of parts) {
@@ -131,7 +143,7 @@ ipcMain.handle("sync", async (event, { rebuild }) => {
       }
     });
     child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
+      stderr += chunk;
     });
     child.on("error", (error) => resolve({ ok: false, error: error.message }));
     child.on("close", (code) => {
@@ -150,16 +162,13 @@ ipcMain.handle("server", async (_event, { action }) => {
   if (action === "start") {
     if (serverChild) return serverStatus(port);
     if (await portOpen(port)) {
-      return { ...(await serverStatus(port)), error: "Something is already listening on that port." };
+      return { ...(await serverStatus(port)), error: "ChatGPT search is already running." };
     }
     if (pythonMissing()) return { running: false, owned: false, error: `Python was not found at ${python}` };
-    serverChild = spawn(python, ["-m", "anki_semantic_search.cli", "--config", configPath, "serve"], {
-      cwd: root,
-      windowsHide: true,
-    });
+    serverChild = spawnPython(["serve"]);
     let stderr = "";
     serverChild.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
+      stderr += chunk;
     });
     serverChild.on("exit", () => {
       serverChild = null;
@@ -177,7 +186,7 @@ ipcMain.handle("server", async (_event, { action }) => {
   if (action === "stop") {
     if (!serverChild) {
       const current = await serverStatus(port);
-      if (current.running) current.error = "The server is running, but this window did not start it.";
+      if (current.running) current.error = "ChatGPT search is on, but it was started outside this window.";
       return current;
     }
     serverChild.kill();
