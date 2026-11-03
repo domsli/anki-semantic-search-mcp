@@ -30,6 +30,7 @@ function stop() {
 
 waitForVite()
   .then(() => {
+    console.log("Opening the window with hot reload.");
     const electron = spawn(electronBin, ["."], {
       cwd: __dirname,
       stdio: "inherit",

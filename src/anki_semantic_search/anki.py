@@ -69,6 +69,8 @@ class AnkiClient:
         return body.get("result")
 
     def fetch_notes(self, decks: tuple[str, ...] | list[str]) -> list[RawNote]:
+        if not decks:
+            return []
         note_ids = [int(note_id) for note_id in self.invoke("findNotes", query=deck_query(decks)) or []]
         if not note_ids:
             return []
@@ -134,11 +136,26 @@ class AnkiClient:
 
     def note_types(self) -> list[dict[str, Any]]:
         names = [str(name) for name in self.invoke("modelNames") or []]
-        types: list[dict[str, Any]] = []
-        for name in names:
-            fields = [str(field) for field in self.invoke("modelFieldNames", modelName=name) or []]
-            types.append({"name": name, "fields": fields})
-        return types
+        return [self._note_type(name) for name in names]
+
+    def note_types_in_decks(self, decks: tuple[str, ...] | list[str]) -> list[dict[str, Any]]:
+        """Note types that actually have cards in these decks, including decks inside them."""
+        if not decks:
+            return []
+        note_ids = [int(note_id) for note_id in self.invoke("findNotes", query=deck_query(decks)) or []]
+        names: list[str] = []
+        seen: set[str] = set()
+        for batch in _batches(note_ids):
+            for info in self.invoke("notesInfo", notes=batch) or []:
+                name = str(info.get("modelName") or "")
+                if name and name not in seen:
+                    seen.add(name)
+                    names.append(name)
+        return [self._note_type(name) for name in names]
+
+    def _note_type(self, name: str) -> dict[str, Any]:
+        fields = [str(field) for field in self.invoke("modelFieldNames", modelName=name) or []]
+        return {"name": name, "fields": fields}
 
     def sample_note(self, model_name: str, decks: tuple[str, ...] | list[str]) -> RawNote | None:
         query = f'note:"{_escape_query(model_name)}"'
@@ -164,7 +181,9 @@ class AnkiClient:
 
 
 def deck_query(decks: tuple[str, ...] | list[str]) -> str:
-    parts = [f'deck:"{_escape_query(name)}"' for name in decks]
+    parts = [f'deck:"{_escape_query(name)}"' for name in decks if name]
+    if not parts:
+        return ""
     if len(parts) == 1:
         return parts[0]
     return f"({' OR '.join(parts)})"

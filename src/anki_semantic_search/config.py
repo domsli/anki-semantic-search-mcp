@@ -48,9 +48,7 @@ def load_config(path: Path) -> Config:
     with path.open("rb") as handle:
         raw = tomllib.load(handle)
 
-    decks = tuple(str(name) for name in raw.get("decks") or [])
-    if not decks:
-        raise SystemExit(f"{path} must list at least one deck under decks.")
+    decks = tuple(str(name) for name in raw.get("decks") or [] if str(name).strip())
 
     data_dir = Path(str(raw.get("data_dir", "data")))
     if not data_dir.is_absolute():

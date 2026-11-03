@@ -4,9 +4,9 @@
 anki_url = "http://127.0.0.1:8765"
 # anki_api_key = ""
 
-# Deck names exactly as Anki shows them. Subdecks are included when the
-# sync query uses `deck:Name`, which matches that deck and its children.
-decks = ["Japanese"]
+# Deck names exactly as Anki shows them. Leave this empty and the window
+# picks one of your decks. A name includes the decks inside it.
+decks = []
 
 # BAAI/bge-m3 matches an English question to a Japanese definition.
 # intfloat/multilingual-e5-base is smaller and faster, and needs query/passage prefixes.

@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from anki_semantic_search.config import load_config, save_settings
+from anki_semantic_search.control import selected_decks
 
 
 class DefaultConfigTests(unittest.TestCase):
@@ -65,6 +66,29 @@ class SaveSettingsTests(unittest.TestCase):
             loaded = load_config(path)
             self.assertEqual(loaded.decks, ("日本語", "日本語::単語"))
             self.assertIn("日本語::単語", path.read_text(encoding="utf-8"))
+
+    def test_empty_deck_list_is_allowed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            path.write_text(
+                'anki_url = "http://127.0.0.1:8765"\ndecks = []\nembedding_model = "BAAI/bge-m3"\n',
+                encoding="utf-8",
+            )
+            self.assertEqual(load_config(path).decks, ())
+
+
+class SelectedDeckTests(unittest.TestCase):
+    def test_missing_saved_deck_is_replaced_by_a_real_one(self) -> None:
+        self.assertEqual(selected_decks(["Default", "Core"], ["Japanese"]), ["Core"])
+
+    def test_saved_deck_is_kept_when_it_exists(self) -> None:
+        self.assertEqual(selected_decks(["Default", "Core", "Mining"], ["Mining"]), ["Mining"])
+
+    def test_only_the_first_saved_deck_is_selected(self) -> None:
+        self.assertEqual(selected_decks(["Core", "Mining"], ["Mining", "Core"]), ["Mining"])
+
+    def test_only_the_built_in_deck_is_used_when_it_is_the_only_one(self) -> None:
+        self.assertEqual(selected_decks(["Default"], ["Japanese"]), ["Default"])
 
 
 if __name__ == "__main__":

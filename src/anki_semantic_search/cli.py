@@ -109,7 +109,9 @@ def _decks(config: Config, args: argparse.Namespace) -> None:
 
 def _note_types(config: Config, args: argparse.Namespace) -> None:
     del args
-    _emit(list_note_types(config))
+    payload = _stdin_json()
+    decks = payload.get("decks") if "decks" in payload else None
+    _emit(list_note_types(config, decks))
 
 
 def _diff(config: Config, args: argparse.Namespace) -> None:

@@ -190,6 +190,37 @@ class AnkiClientTests(unittest.TestCase):
             client.invoke("version")
         self.assertIn("AnkiConnect", str(caught.exception))
 
+    def test_note_types_in_decks_skip_models_outside_the_deck(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            body = json.loads(request.content)
+            action = body["action"]
+            if action == "findNotes":
+                self.assertEqual(body["params"]["query"], 'deck:"Core"')
+                result = [1, 2]
+            elif action == "notesInfo":
+                result = [
+                    {"noteId": 1, "modelName": "Japanese"},
+                    {"noteId": 2, "modelName": "Japanese"},
+                ]
+            elif action == "modelFieldNames":
+                self.assertEqual(body["params"]["modelName"], "Japanese")
+                result = ["Expression", "Meaning"]
+            else:
+                raise AssertionError(action)
+            return httpx.Response(200, json={"result": result, "error": None})
+
+        client = AnkiClient("http://127.0.0.1:8765", client=httpx.Client(transport=httpx.MockTransport(handler)))
+        types = client.note_types_in_decks(["Core"])
+        self.assertEqual(types, [{"name": "Japanese", "fields": ["Expression", "Meaning"]}])
+
+    def test_fetch_notes_with_no_decks_does_not_call_anki(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            del request
+            raise AssertionError("Anki should not be contacted")
+
+        client = AnkiClient("http://127.0.0.1:8765", client=httpx.Client(transport=httpx.MockTransport(handler)))
+        self.assertEqual(client.fetch_notes([]), [])
+
 
 if __name__ == "__main__":
     unittest.main()

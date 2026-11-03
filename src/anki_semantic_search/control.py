@@ -40,16 +40,32 @@ def list_decks(config: Config) -> dict:
             live = client.deck_names()
     except AnkiError as exc:
         return {"ok": True, "anki_open": False, "error": str(exc), "decks": list(config.decks), "selected": list(config.decks)}
-    names = list(dict.fromkeys([*live, *config.decks]))
-    return {"ok": True, "anki_open": True, "decks": names, "selected": list(config.decks), "live": live}
+    return {"ok": True, "anki_open": True, "decks": live, "selected": selected_decks(live, list(config.decks)), "live": live}
 
 
-def list_note_types(config: Config) -> dict:
+def selected_decks(live: list[str], saved: list[str]) -> list[str]:
+    """One deck. Keep the first saved deck that still exists, or pick a real deck."""
+    present = {name for name in live}
+    chosen = [name for name in saved if name in present]
+    if chosen:
+        return [chosen[0]]
+    if not live:
+        return []
+    for name in live:
+        if name != "Default":
+            return [name]
+    return [live[0]]
+
+
+def list_note_types(config: Config, decks: list[str] | None = None) -> dict:
+    chosen = list(config.decks if decks is None else decks)
+    if decks is not None and not chosen:
+        return {"ok": True, "anki_open": True, "note_types": []}
     try:
         with AnkiClient(config.anki_url, config.anki_api_key) as client:
-            live = client.note_types()
+            live = client.note_types() if decks is None else client.note_types_in_decks(chosen)
     except AnkiError as exc:
-        return {"ok": True, "anki_open": False, "error": str(exc), "note_types": _saved_note_types(config)}
+        return {"ok": True, "anki_open": False, "error": str(exc), "note_types": []}
     types = []
     for item in live:
         name = item["name"]
@@ -106,21 +122,6 @@ def read_diff(config: Config) -> dict:
         return diff_index(config)
     except AnkiError as exc:
         return {"ok": False, "error": str(exc)}
-
-
-def _saved_note_types(config: Config) -> list[dict]:
-    saved = []
-    for name, roles in config.note_types.items():
-        fields = [field_name for role in _ROLES for field_name in getattr(roles, role)]
-        saved.append(
-            {
-                "name": name,
-                "fields": fields,
-                "mapped": True,
-                "roles": _roles_for(fields, roles, leftovers=False),
-            }
-        )
-    return saved
 
 
 def _roles_for(field_names: list[str], field_map: FieldMap, *, leftovers: bool) -> dict[str, str]:
