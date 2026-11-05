@@ -10,3 +10,6 @@ build/
 .mypy_cache/
 .ruff_cache/
 desktop/node_modules/
+
+# Personal settings; created from config.example.toml when missing.
+config.toml
