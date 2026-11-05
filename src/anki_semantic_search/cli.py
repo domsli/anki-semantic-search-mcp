@@ -63,17 +63,27 @@ def _sync(config: Config, args: argparse.Namespace) -> None:
     def on_progress(done: int, total: int) -> None:
         _emit({"event": "progress", "embedded": done, "total": total})
 
+    def on_status(message: str) -> None:
+        _emit({"event": "progress", "message": message})
+
     try:
         stats = sync_index(
             config,
             rebuild=args.rebuild,
             on_progress=on_progress if args.json else None,
+            on_status=on_status if args.json else None,
         )
     except AnkiError as exc:
         if args.json:
             _emit({"ok": False, "error": str(exc)})
             raise SystemExit(1) from exc
         raise SystemExit(str(exc)) from exc
+    except Exception as exc:
+        message = _sync_error(exc)
+        if args.json:
+            _emit({"ok": False, "error": message})
+            raise SystemExit(1) from exc
+        raise
     payload = {
         "ok": True,
         "event": "done",
@@ -90,6 +100,14 @@ def _sync(config: Config, args: argparse.Namespace) -> None:
         f"Indexed {stats.total} notes: embedded {stats.embedded}, "
         f"updated {stats.updated}, unchanged {stats.unchanged}, removed {stats.removed}."
     )
+
+
+def _sync_error(exc: BaseException) -> str:
+    text = str(exc)
+    if "Failed to allocate memory" in text or "AllocateRawInternal" in text:
+        return "The embedding model ran out of memory."
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return lines[-1] if lines else exc.__class__.__name__
 
 
 def _serve(config: Config, args: argparse.Namespace) -> None:

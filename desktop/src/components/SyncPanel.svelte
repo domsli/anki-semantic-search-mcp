@@ -1,5 +1,6 @@
 <script>
   import Spinner from "./Spinner.svelte";
+  import { configurationEntries } from "../lib/configuration.js";
 
   let {
     snapshot,
@@ -10,34 +11,61 @@
     syncing,
     comparing,
     saving,
-    dirty,
     deck,
+    indexedConfiguration,
+    vectorUpdated,
+    configDifferences,
     onCompare,
     onSync,
     onRebuild,
-    onSave,
   } = $props();
+
+  let indexed = $derived(indexedConfiguration ? configurationEntries(indexedConfiguration) : null);
 </script>
 
 <section>
-  <h2>3. Update search</h2>
-  <p class="hint">
-    Press Update search. That saves this deck and reads it from Anki.
-    Picking a different deck, or adding cards in Anki, does not update search on its own.
-    Anki needs to be open.
-  </p>
-  {#if dirty}
-    <p class="snapshot">
-      {deck
-        ? `Update search will read ${deck}.`
-        : "Choose a deck before updating search."}
-    </p>
+  <h2>3. Vector database</h2>
+  <h3>Stored configuration</h3>
+  {#if indexed}
+    <ul class="config-list">
+      <li>Deck: {indexed.decks.join(", ") || "None"}</li>
+      {#if indexed.types.length === 0}
+        <li>No card type set up.</li>
+      {:else}
+        {#each indexed.types as type (type.name)}
+          <li>
+            {type.name}
+            {#if type.fields.length === 0}
+              <ul><li>None.</li></ul>
+            {:else}
+              <ul>
+                {#each type.fields as row (row.field)}
+                  <li>{row.field}: {row.label}</li>
+                {/each}
+              </ul>
+            {/if}
+          </li>
+        {/each}
+      {/if}
+    </ul>
+  {:else if vectorUpdated}
+    <p class="snapshot">Not recorded.</p>
+  {:else}
+    <p class="snapshot">None yet.</p>
+  {/if}
+  {#if configDifferences.length}
+    <p class="snapshot">Different from above.</p>
+    <ul class="config-list">
+      {#each configDifferences as line, index (index)}
+        <li>{line}</li>
+      {/each}
+    </ul>
   {/if}
   <p class="snapshot">{snapshot}</p>
   <p class="diff" class:status={comparing} class:error={diffError} role="status">
-    {#if comparing}<Spinner /><span>Checking what changed…</span>{:else}{diff}{/if}
+    {#if comparing}<Spinner /><span>Comparing…</span>{:else}{diff}{/if}
   </p>
-  {#if progress || syncing || saving}
+  {#if progress || syncing}
     <p class="progress" class:status={syncing || saving} class:error={progressError} role="status">
       {#if syncing || saving}<Spinner />{/if}
       <span>{progress}</span>
@@ -46,11 +74,6 @@
   <div class="row">
     <button type="button" class="primary" onclick={onSync} disabled={!deck || syncing || comparing || saving}>Update search</button>
     <button type="button" onclick={onCompare} disabled={!deck || syncing || comparing || saving}>See what changed</button>
-    <button type="button" onclick={onRebuild} disabled={!deck || syncing || comparing || saving}>Update everything</button>
-    <button type="button" onclick={() => onSave()} disabled={!deck || syncing || comparing || saving}>Save without updating</button>
+    <button type="button" onclick={onRebuild} disabled={!deck || syncing || comparing || saving}>Measure every card again</button>
   </div>
-  <p class="hint">
-    See what changed previews the next update. Update everything rereads every card and takes longer.
-    Save without updating remembers this deck for later.
-  </p>
 </section>

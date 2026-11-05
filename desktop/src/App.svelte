@@ -5,6 +5,7 @@
   import ServerPanel from "./components/ServerPanel.svelte";
   import Spinner from "./components/Spinner.svelte";
   import SyncPanel from "./components/SyncPanel.svelte";
+  import { configurationDifferences } from "./lib/configuration.js";
   import { roleLists } from "./lib/roles.js";
 
   let ankiOpen = $state(false);
@@ -26,14 +27,20 @@
   let serverBusyLabel = $state("");
   let ankiState = $state("Reading your last update…");
   let ankiError = $state(false);
-  let snapshot = $state("Search has not been updated yet.");
-  let diff = $state("Open Anki to see whether search is up to date.");
+  let snapshot = $state("Not updated yet.");
+  let diff = $state("Open Anki to compare.");
   let diffError = $state(false);
   let progress = $state("");
   let progressError = $state(false);
-  let preview = $state("Open Anki to see an example.");
+  let saveProgress = $state("");
+  let saveError = $state(false);
+  let savedConfiguration = $state({ decks: [], note_types: {} });
+  let indexedConfiguration = $state(null);
+  let vectorUpdated = $state(false);
+  let typesReady = $state(false);
+  let preview = $state("Open Anki.");
   let previewError = $state(false);
-  let serverState = $state("Stopped");
+  let serverState = $state("Off");
   let serverError = $state(false);
   let serverUrl = $state("");
 
@@ -43,25 +50,60 @@
     return deck ? [deck] : [];
   }
 
+  function draftConfiguration() {
+    return {
+      decks: chosenDecks(),
+      note_types: Object.fromEntries(
+        noteTypes.filter((item) => item.mapped).map((item) => [item.name, roleLists(item)]),
+      ),
+    };
+  }
+
+  let activeConfiguration = $derived(
+    typesReady ? draftConfiguration() : { decks: savedConfiguration.decks || [], note_types: savedConfiguration.note_types || {} },
+  );
+  let configDifferences = $derived(configurationDifferences(indexedConfiguration, activeConfiguration));
+
+  function markDirty() {
+    if (!ankiOpen) {
+      dirty = false;
+      return;
+    }
+    const savedDecks = savedConfiguration.decks || [];
+    if (!typesReady) {
+      dirty = savedDecks.length !== 1 || savedDecks[0] !== deck;
+      return;
+    }
+    dirty = configurationDifferences(savedConfiguration, draftConfiguration()).length > 0;
+  }
+
+  function applyStatus(status) {
+    snapshot = snapshotText(status);
+    serverPort = status.port || 8000;
+    vectorUpdated = Boolean(status.last_synced_at);
+    savedConfiguration = { decks: status.decks || [], note_types: status.note_types || {} };
+    indexedConfiguration = status.indexed_configuration || null;
+  }
+
   async function chooseDeck(name) {
     if (name === deck) return;
     deck = name;
-    dirty = true;
     refreshing = true;
     try {
       await loadCardTypes();
     } finally {
+      markDirty();
       refreshing = false;
       if (!ankiError) {
         ankiState = ankiOpen
           ? "Anki is open."
-          : "Anki is closed. Open it to choose a deck, set up card fields, and update search.";
+          : "Anki is closed.";
       }
     }
   }
 
   function onFieldsChange() {
-    dirty = true;
+    markDirty();
     refreshPreview();
   }
 
@@ -73,7 +115,7 @@
 
   function snapshotText(status) {
     if (!status || !status.last_synced_at) {
-      return "Search has not been updated yet. Open Anki and update search so your cards can be found.";
+      return "Not updated yet.";
     }
     const parts = [];
     if (status.embedded) parts.push(`${status.embedded} added`);
@@ -81,20 +123,20 @@
     if (status.removed) parts.push(`${status.removed} removed`);
     const detail = parts.length ? ` ${parts.join(", ")}.` : "";
     const count = status.note_count ?? 0;
-    const cards = count === 1 ? "1 card is searchable" : `${count} cards are searchable`;
-    return `Last updated ${formatWhen(status.last_synced_at)}. ${cards}.${detail}`;
+    const cards = count === 1 ? "1 card" : `${count} cards`;
+    return `Updated ${formatWhen(status.last_synced_at)}. ${cards}.${detail}`;
   }
 
   function applyServer(server) {
     serverUrl = server.url || `http://127.0.0.1:${serverPort || 8000}/mcp`;
     serverError = Boolean(server.error);
     if (server.error) serverState = server.error;
-    else serverState = server.running ? "On. ChatGPT can search your cards." : "Off.";
+    else serverState = server.running ? "On" : "Off";
   }
 
   async function refreshPreview(item = current) {
     if (!item || !ankiOpen) {
-      preview = "Open Anki to see an example.";
+      preview = "Open Anki.";
       previewError = false;
       previewing = false;
       return;
@@ -133,59 +175,66 @@
   async function loadCardTypes() {
     if (!ankiOpen || !deck) {
       loadingTypes = false;
+      typesReady = false;
       noteTypes = [];
       noteTypeName = "";
       previewError = false;
-      preview = ankiOpen ? "Choose a deck to see its card types." : "Open Anki to choose a deck and see its card types.";
+      preview = ankiOpen ? "Choose a deck." : "Open Anki.";
       return;
     }
     loadingTypes = true;
-    ankiState = "Loading card types in this deck…";
+    typesReady = false;
+    ankiState = "Loading card types…";
     try {
       const types = await window.anki.api("note-types", { decks: chosenDecks() });
       ankiOpen = Boolean(types.anki_open);
+      if (!ankiOpen) {
+        typesReady = false;
+        noteTypes = [];
+        noteTypeName = "";
+        return;
+      }
       keepNoteType(types.note_types || []);
+      typesReady = true;
     } finally {
       loadingTypes = false;
     }
     const active = noteTypes.find((item) => item.name === noteTypeName) ?? null;
     if (active && ankiOpen) {
-      ankiState = "Loading an example card…";
+      ankiState = "Loading an example…";
       await refreshPreview(active);
       return;
     }
     previewError = false;
-    if (ankiOpen) preview = "No card types found in this deck.";
-    else preview = "Open Anki to see card types.";
+    if (ankiOpen) preview = "No card types.";
+    else preview = "Open Anki.";
   }
 
   async function refresh() {
     refreshing = true;
     ankiError = false;
     try {
-      ankiState = "Reading your last update…";
+      ankiState = "Reading the last update…";
       const status = await window.anki.api("status");
       if (!status.ok) {
         ankiState = status.error || "Couldn't open your settings.";
         ankiError = true;
         return;
       }
-      snapshot = snapshotText(status);
-      serverPort = status.port || 8000;
-      ankiState = "Checking whether Anki is open…";
+      applyStatus(status);
+      ankiState = "Checking Anki…";
       const deckResult = await window.anki.api("decks");
       ankiOpen = Boolean(deckResult.anki_open);
       decks = deckResult.decks || [];
       deck = deckResult.selected?.[0] || "";
-      const saved = status.decks || [];
-      dirty = ankiOpen && (saved.length !== 1 || saved[0] !== deck);
       ready = true;
       await loadCardTypes();
-      ankiState = "Checking whether ChatGPT is on…";
+      markDirty();
+      ankiState = "Checking the MCP server…";
       applyServer(await window.anki.server("status"));
       ankiState = ankiOpen
         ? "Anki is open."
-        : "Anki is closed. Open it to choose a deck, set up card fields, and update search.";
+        : "Anki is closed.";
     } finally {
       refreshing = false;
       ready = true;
@@ -195,8 +244,8 @@
   async function save({ announce = true } = {}) {
     saving = true;
     if (announce) {
-      progressError = false;
-      progress = "Saving…";
+      saveError = false;
+      saveProgress = "Saving…";
     }
     try {
       const payload = { decks: chosenDecks() };
@@ -208,14 +257,22 @@
       }
       const result = await window.anki.api("save", payload);
       if (!result.ok) {
-        progress = result.error || "Couldn't save.";
-        progressError = true;
+        const message = result.error || "Couldn't save.";
+        if (announce) {
+          saveProgress = message;
+          saveError = true;
+        } else {
+          progress = message;
+          progressError = true;
+        }
         return false;
       }
-      dirty = false;
-      progressError = false;
-      if (announce) progress = "Saved. Press Update search when you want this deck included.";
-      snapshot = snapshotText(result);
+      applyStatus(result);
+      markDirty();
+      if (announce) {
+        saveError = false;
+        saveProgress = "Saved.";
+      }
       return true;
     } finally {
       saving = false;
@@ -228,36 +285,36 @@
       if (dirty && !(await save({ announce: false }))) return;
       const result = await window.anki.api("diff");
       if (!result) {
-        diff = "Open Anki to see whether search is up to date.";
+        diff = "Open Anki to compare.";
         diffError = false;
         return;
       }
       if (!result.ok) {
-        diff = result.error || "Couldn't compare with Anki.";
+        diff = result.error || "Couldn't compare.";
         diffError = true;
         return;
       }
       diffError = false;
       const examples = result.examples || {};
-      const labels = { embed: "New or changed", update: "Review dates only", remove: "No longer in this deck" };
+      const labels = { embed: "New or changed", update: "Review dates", remove: "Removed" };
       const sample = Object.entries(labels)
         .filter(([key]) => (examples[key] || []).length)
         .map(([key, label]) => `${label}: ${examples[key].join(", ")}`)
         .join(" · ");
-      diff = `${result.would_embed} new or changed, ${result.would_update} with only a newer review, ${result.unchanged} already current, ${result.would_remove} no longer in this deck.${sample ? ` ${sample}` : ""}`;
+      diff = `${result.would_embed} new or changed, ${result.would_update} review dates, ${result.unchanged} current, ${result.would_remove} removed.${sample ? ` ${sample}` : ""}`;
     } finally {
       comparing = false;
     }
   }
 
   async function runSync(rebuild) {
-    if (rebuild && !window.confirm("This rereads every card. It can take a while. Continue?")) return;
+    if (rebuild && !window.confirm("Remeasure every card in this deck? This can take a while.")) return;
     syncing = true;
     progressError = false;
-    progress = "Saving your choices…";
+      progress = "Saving…";
     try {
       if (!(await save({ announce: false }))) return;
-      progress = rebuild ? "Updating every card…" : "Updating search…";
+      progress = rebuild ? "Measuring every card…" : "Updating…";
       const result = await window.anki.sync(rebuild);
       if (!result.ok) {
         progress = result.error || "Update failed.";
@@ -281,7 +338,7 @@
       return;
     }
     const stopProgress = window.anki.onSyncProgress((event) => {
-      progress = `Updating card ${event.embedded} of ${event.total}…`;
+      progress = event.message || `Updating card ${event.embedded} of ${event.total}…`;
     });
     const stopServer = window.anki.onServerExit(async (event) => {
       const server = await window.anki.server("status");
@@ -299,10 +356,7 @@
 <header>
   <div>
     <h1>Search your cards</h1>
-    <p class="lede">
-      Choose one deck for ChatGPT to search, mark the word and the definition, then press Update search.
-      Start ChatGPT after that.
-    </p>
+    <p class="lede">Update the configuration and the vector database.</p>
     {#if refreshing && !ready}
       <p class="loading" role="status"><Spinner large /><span>{ankiState}</span></p>
     {:else}
@@ -325,8 +379,15 @@
     {previewError}
     {previewing}
     {loadingTypes}
+    {deck}
+    {saving}
+    {syncing}
+    {comparing}
+    {saveProgress}
+    {saveError}
     onChange={refreshPreview}
     onEdit={onFieldsChange}
+    onSave={save}
   />
   <SyncPanel
     {snapshot}
@@ -337,12 +398,13 @@
     {syncing}
     {comparing}
     {saving}
-    {dirty}
     {deck}
+    {indexedConfiguration}
+    {vectorUpdated}
+    {configDifferences}
     onCompare={compare}
     onSync={() => runSync(false)}
     onRebuild={() => runSync(true)}
-    onSave={save}
   />
   <ServerPanel
     state={serverState}
@@ -352,7 +414,7 @@
     busyLabel={serverBusyLabel}
     onStart={async () => {
       serverBusy = true;
-      serverBusyLabel = "Turning ChatGPT on…";
+      serverBusyLabel = "Starting…";
       try {
         applyServer(await window.anki.server("start"));
       } finally {
@@ -361,7 +423,7 @@
     }}
     onStop={async () => {
       serverBusy = true;
-      serverBusyLabel = "Turning ChatGPT off…";
+      serverBusyLabel = "Stopping…";
       try {
         applyServer(await window.anki.server("stop"));
       } finally {

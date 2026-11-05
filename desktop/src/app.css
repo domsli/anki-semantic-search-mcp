@@ -17,6 +17,10 @@ label.check {
   gap: 12px;
 }
 
+.row {
+  flex-wrap: wrap;
+}
+
 header {
   justify-content: space-between;
   align-items: flex-start;
@@ -49,6 +53,16 @@ section {
   margin: 0 0 10px;
 }
 
+.config-list {
+  margin: 0 0 10px;
+  padding-left: 1.2rem;
+}
+
+.config-list ul {
+  margin: 4px 0 8px;
+  padding-left: 1.2rem;
+}
+
 .deck-pick {
   display: flex;
   align-items: center;
@@ -69,6 +83,10 @@ section {
   align-items: center;
   gap: 12px;
   margin: 6px 0;
+}
+
+.field select {
+  min-width: 18rem;
 }
 
 select,

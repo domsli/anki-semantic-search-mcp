@@ -31,6 +31,7 @@ def status(config: Config) -> dict:
         "unchanged": meta.get("unchanged"),
         "removed": meta.get("removed"),
         "embedding_model": meta.get("embedding_model") or config.embedding_model,
+        "indexed_configuration": meta.get("configuration"),
     }
 
 

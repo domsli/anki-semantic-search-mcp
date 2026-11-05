@@ -13,6 +13,9 @@ const pythonEnv = {
   ...process.env,
   PYTHONIOENCODING: "utf-8",
   PYTHONUTF8: "1",
+  HF_HUB_DISABLE_SYMLINKS_WARNING: "1",
+  HF_HUB_DISABLE_PROGRESS_BARS: "1",
+  TQDM_DISABLE: "1",
 };
 
 let mainWindow = null;
@@ -162,7 +165,7 @@ ipcMain.handle("server", async (_event, { action }) => {
   if (action === "start") {
     if (serverChild) return serverStatus(port);
     if (await portOpen(port)) {
-      return { ...(await serverStatus(port)), error: "ChatGPT search is already running." };
+      return { ...(await serverStatus(port)), error: "Already running." };
     }
     if (pythonMissing()) return { running: false, owned: false, error: `Python was not found at ${python}` };
     serverChild = spawnPython(["serve"]);
@@ -186,7 +189,7 @@ ipcMain.handle("server", async (_event, { action }) => {
   if (action === "stop") {
     if (!serverChild) {
       const current = await serverStatus(port);
-      if (current.running) current.error = "ChatGPT search is on, but it was started outside this window.";
+      if (current.running) current.error = "Running outside this window.";
       return current;
     }
     serverChild.kill();

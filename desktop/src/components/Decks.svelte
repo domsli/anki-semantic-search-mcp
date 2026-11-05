@@ -1,22 +1,13 @@
 <script>
   let { decks, deck, dirty, onChoose } = $props();
 
-  let summary = $derived.by(() => {
-    if (!deck) return "No deck chosen yet. Pick one, then press Update search.";
-    if (dirty) return `Chosen: ${deck}. Press Update search to use this deck. Choosing a deck does not update search by itself.`;
-    return `Saved: ${deck}. Press Update search to read new and edited cards from this deck.`;
-  });
 </script>
 
 <section>
-  <h2>1. Choose a deck</h2>
-  <p class="hint">
-    Search updates one deck at a time. A deck includes the decks inside it.
-    The choice does nothing until you press Update search.
-  </p>
-  <p class="snapshot">{summary}</p>
+  <h2>1. Deck</h2>
+  <p class="hint">Includes nested decks. Other decks are left out.</p>
   {#if decks.length === 0}
-    <p>Open Anki, then refresh, to see your decks.</p>
+    <p>Open Anki and refresh.</p>
   {:else}
     <label class="deck-pick">
       Deck
@@ -29,5 +20,6 @@
         {/each}
       </select>
     </label>
+    {#if dirty}<p class="snapshot">Unsaved.</p>{/if}
   {/if}
 </section>

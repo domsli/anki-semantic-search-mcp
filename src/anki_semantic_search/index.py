@@ -19,6 +19,11 @@ TABLE_NAME = "notes"
 _META_NAME = "sync_meta.json"
 _VECTOR_INDEX_MIN_ROWS = 256
 _EMBED_BATCH = 32
+_BGE_M3 = "BAAI/bge-m3"
+_BGE_M3_DOWNLOAD = "2.3 GB"
+# The full 8192-token context makes one attention step ask for about 5 GB.
+_BGE_M3_MAX_TOKENS = 512
+_BGE_M3_BATCH = 4
 
 
 class Embedder(Protocol):
@@ -39,8 +44,9 @@ class SyncStats:
 class FastEmbedEmbedder:
     """Local fastembed model. E5 models get passage prefixes; bge-m3 does not."""
 
-    def __init__(self, model_name: str) -> None:
+    def __init__(self, model_name: str, on_status: Callable[[str], None] | None = None) -> None:
         self.model_name = model_name
+        self._on_status = on_status
         self._model: object | None = None
 
     def embed_passages(self, texts: list[str]) -> list[list[float]]:
@@ -57,15 +63,70 @@ class FastEmbedEmbedder:
         vectors: list[list[float]] = []
         for start in range(0, len(texts), _EMBED_BATCH):
             chunk = texts[start : start + _EMBED_BATCH]
-            vectors.extend(vector.tolist() for vector in model.embed(chunk))
+            batch_size = _BGE_M3_BATCH if self.model_name.lower() == _BGE_M3.lower() else len(chunk)
+            vectors.extend(vector.tolist() for vector in model.embed(chunk, batch_size=batch_size))
         return vectors
 
     def _load(self) -> object:
         if self._model is None:
             from fastembed import TextEmbedding
 
-            self._model = TextEmbedding(model_name=self.model_name)
+            if self._on_status is not None:
+                if _weights_cached(self.model_name):
+                    self._on_status(f"Loading {self.model_name}…")
+                else:
+                    size = f" ({_BGE_M3_DOWNLOAD})" if self.model_name.lower() == _BGE_M3.lower() else ""
+                    self._on_status(f"Downloading {self.model_name}{size}…")
+            _register_bge_m3(self.model_name)
+            model = TextEmbedding(model_name=self.model_name)
+            if self.model_name.lower() == _BGE_M3.lower():
+                _cap_sequence(model, _BGE_M3_MAX_TOKENS)
+            self._model = model
         return self._model
+
+
+def _register_bge_m3(model_name: str) -> None:
+    """fastembed 0.9 has no built-in BGE-M3. Register the official ONNX export."""
+    if model_name.lower() != _BGE_M3.lower():
+        return
+    from fastembed import TextEmbedding
+    from fastembed.common.model_description import ModelSource, PoolingType
+
+    supported = TextEmbedding.list_supported_models()
+    if any(model["model"].lower() == _BGE_M3.lower() for model in supported):
+        return
+    TextEmbedding.add_custom_model(
+        model=_BGE_M3,
+        pooling=PoolingType.CLS,
+        normalization=True,
+        sources=ModelSource(hf=_BGE_M3),
+        dim=1024,
+        model_file="onnx/model.onnx",
+        description="Multilingual dense embeddings.",
+        license="mit",
+        size_in_gb=2.27,
+        additional_files=["onnx/model.onnx_data"],
+    )
+
+
+def _weights_cached(model_name: str) -> bool:
+    import tempfile
+    from pathlib import Path
+
+    repo = Path(tempfile.gettempdir()) / "fastembed_cache" / f"models--{model_name.replace('/', '--')}"
+    if not repo.is_dir():
+        return False
+    return any(repo.rglob("model.onnx_data")) or any(repo.rglob("model.onnx"))
+
+
+def _cap_sequence(model: object, max_length: int) -> None:
+    inner = getattr(model, "model", None)
+    tokenizer = getattr(inner, "tokenizer", None)
+    if tokenizer is None:
+        return
+    truncation = tokenizer.truncation or {}
+    direction = truncation.get("direction", "right") if isinstance(truncation, dict) else "right"
+    tokenizer.enable_truncation(max_length=max_length, direction=direction)
 
 
 def passage_input(model_name: str, text: str) -> str:
@@ -109,6 +170,7 @@ def sync_index(
     notes: Sequence[RawNote] | None = None,
     embedder: Embedder | None = None,
     on_progress: Callable[[int, int], None] | None = None,
+    on_status: Callable[[str], None] | None = None,
 ) -> SyncStats:
     """Refresh the on-disk index from Anki notes.
 
@@ -119,7 +181,7 @@ def sync_index(
     if notes is None:
         with AnkiClient(config.anki_url, config.anki_api_key) as client:
             notes = client.fetch_notes(config.decks)
-    embedder = embedder or FastEmbedEmbedder(config.embedding_model)
+    embedder = embedder or FastEmbedEmbedder(config.embedding_model, on_status=on_status)
     prepared = _prepare(config, notes)
 
     config.data_dir.mkdir(parents=True, exist_ok=True)
@@ -340,5 +402,9 @@ def _write_meta(config: Config, model_name: str, stats: SyncStats) -> None:
         "updated": stats.updated,
         "unchanged": stats.unchanged,
         "removed": stats.removed,
+        "configuration": {
+            "decks": list(config.decks),
+            "note_types": {name: mapping.as_dict() for name, mapping in config.note_types.items()},
+        },
     }
     (config.data_dir / _META_NAME).write_text(json.dumps(payload), encoding="utf-8")

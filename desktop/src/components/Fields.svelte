@@ -10,8 +10,15 @@
     previewError,
     previewing,
     loadingTypes,
+    deck,
+    saving,
+    syncing,
+    comparing,
+    saveProgress,
+    saveError,
     onChange,
     onEdit,
+    onSave,
   } = $props();
 
   let current = $derived(noteTypes.find((item) => item.name === noteTypeName) ?? null);
@@ -27,14 +34,10 @@
 </script>
 
 <section>
-  <h2>2. Mark the word and the definition</h2>
-  <p class="hint">
-    These are the card types in this deck. For one of them, say which box is the word and which is the definition, and leave out audio and pictures.
-    Card types you leave alone still match usual names such as Front, Expression, or Meaning.
-    Press Update search after you change this.
-  </p>
+  <h2>2. Fields</h2>
+  <p class="hint">These boxes are what distance uses. Unset card types use Front, Expression, or Meaning.</p>
   {#if loadingTypes}
-    <p class="status" role="status"><Spinner /><span>Loading card types in this deck…</span></p>
+    <p class="status" role="status"><Spinner /><span>Loading card types…</span></p>
   {:else}
     <label>
       Card type
@@ -78,11 +81,20 @@
         {/each}
       {/if}
     </div>
-    <h3>Example of what search will use</h3>
+    <h3>Example</h3>
     {#if previewing}
-      <p class="status" role="status"><Spinner /><span>Loading an example card…</span></p>
+      <p class="status" role="status"><Spinner /><span>Loading an example…</span></p>
     {:else}
       <pre class:error={previewError}>{preview}</pre>
     {/if}
   {/if}
+  <h3>Save configuration</h3>
+  <p class="hint">Does not update the vector database.</p>
+  {#if saveProgress || saving}
+    <p class="progress" class:status={saving} class:error={saveError} role="status">
+      {#if saving}<Spinner />{/if}
+      <span>{saveProgress}</span>
+    </p>
+  {/if}
+  <button type="button" onclick={() => onSave()} disabled={!deck || saving || syncing || comparing}>Save configuration</button>
 </section>

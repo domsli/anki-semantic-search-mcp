@@ -17,7 +17,7 @@ The window does four things, in order:
 1. **Choose a deck.** Search updates one deck at a time. A deck includes the decks inside it. The choice waits until you update search.
 2. **Mark the word and the definition.** Optional. Say which box is the word and which is the definition. Card types you leave alone still match usual names such as Front, Expression, or Meaning.
 3. **Update search.** This is the button that applies the checks and reads Anki. Anki needs to be open. See what changed previews that update. Update everything rereads every card. Save without updating remembers the checks for later.
-4. **Turn on ChatGPT.** Start after search is updated. The address is `http://127.0.0.1:8000/mcp`. ChatGPT can keep searching after you close Anki, as long as this stays on.
+4. **Start MCP server.** Start it after the vector database is updated. The address is `http://127.0.0.1:8000/mcp`. ChatGPT can keep searching after you close Anki, as long as the server stays on.
 
 ## Connect ChatGPT
 

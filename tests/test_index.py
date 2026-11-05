@@ -168,6 +168,19 @@ class SyncTests(unittest.TestCase):
             self.assertEqual(meta["note_count"], 1)
             self.assertEqual(meta["embedded"], 1)
             self.assertTrue(meta["last_synced_at"])
+            self.assertEqual(meta["configuration"]["decks"], ["Japanese"])
+            self.assertEqual(meta["configuration"]["note_types"], {})
+
+    def test_bge_m3_is_registered_with_fastembed(self) -> None:
+        try:
+            from fastembed import TextEmbedding
+        except ImportError:
+            self.skipTest("fastembed is not installed")
+        from anki_semantic_search.index import _register_bge_m3
+
+        _register_bge_m3("BAAI/bge-m3")
+        names = {model["model"].lower() for model in TextEmbedding.list_supported_models()}
+        self.assertIn("baai/bge-m3", names)
 
 
 if __name__ == "__main__":
