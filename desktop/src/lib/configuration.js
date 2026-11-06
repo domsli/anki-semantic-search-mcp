@@ -39,8 +39,9 @@ export function configurationDifferences(previous, next) {
   const oldDecks = (previous.decks || []).filter(Boolean);
   const newDecks = (next.decks || []).filter(Boolean);
   const missing = newDecks.filter((name) => !oldDecks.includes(name));
-  if (missing.length) notes.push(`Deck not in search yet: ${missing.join(", ")}`);
-  else if (!newDecks.length && oldDecks.length) notes.push("No deck.");
+  if (missing.length) notes.push(`Not in search yet: ${missing.join(", ")}`);
+  const dropped = oldDecks.filter((name) => !newDecks.includes(name));
+  if (dropped.length) notes.push(`No longer tracked: ${dropped.join(", ")}`);
 
   const oldTypes = previous.note_types || {};
   const newTypes = next.note_types || {};

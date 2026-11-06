@@ -11,7 +11,7 @@
     syncing,
     comparing,
     saving,
-    deck,
+    hasDecks,
     indexedConfiguration,
     vectorUpdated,
     configDifferences,
@@ -28,7 +28,6 @@
   <h3>Stored configuration</h3>
   {#if indexed}
     <ul class="config-list">
-      <li>Decks in search: {indexed.decks.join(", ") || "None"}</li>
       {#if indexed.types.length === 0}
         <li>Every card type uses the default fields.</li>
       {:else}
@@ -74,11 +73,11 @@
   {/if}
   <p class="hint">
     The vector database does not follow Anki on its own. Cards you add, edit, delete, or review appear in search
-    only after Update deck.
+    only after Update decks.
   </p>
   <div class="row">
-    <button type="button" class="primary" onclick={onSync} disabled={!deck || syncing || comparing || saving}>Update deck</button>
-    <button type="button" onclick={onCompare} disabled={!deck || syncing || comparing || saving}>See missed updates</button>
-    <button type="button" onclick={onRebuild} disabled={!deck || syncing || comparing || saving}>Re-index deck</button>
+    <button type="button" class="primary" onclick={onSync} disabled={!hasDecks || syncing || comparing || saving}>Update decks</button>
+    <button type="button" onclick={onCompare} disabled={!hasDecks || syncing || comparing || saving}>See missed updates</button>
+    <button type="button" onclick={onRebuild} disabled={!hasDecks || syncing || comparing || saving}>Re-index decks</button>
   </div>
 </section>

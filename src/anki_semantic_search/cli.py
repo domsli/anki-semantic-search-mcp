@@ -9,7 +9,15 @@ from pathlib import Path
 
 from anki_semantic_search.anki import AnkiError
 from anki_semantic_search.config import Config, load_config
-from anki_semantic_search.control import list_decks, list_note_types, preview_note, read_diff, save, status
+from anki_semantic_search.control import (
+    list_decks,
+    list_note_types,
+    preview_note,
+    read_diff,
+    remove_deck,
+    save,
+    status,
+)
 from anki_semantic_search.index import sync_index
 from anki_semantic_search.server import serve
 
@@ -42,7 +50,7 @@ def main(argv: list[str] | None = None) -> None:
 
     for name, func, help_text in (
         ("status", _status, "Show the last sync snapshot without contacting Anki."),
-        ("decks", _decks, "List Anki decks and which ones are selected."),
+        ("decks", _decks, "List Anki decks and the decks tracked for search."),
         ("note-types", _note_types, "List Anki note types and their field roles."),
         ("diff", _diff, "Compare Anki with the index without embedding."),
     ):
@@ -53,6 +61,11 @@ def main(argv: list[str] | None = None) -> None:
     preview.set_defaults(func=_preview)
     save_command = commands.add_parser("save", help="Write decks and note-type maps. Reads a JSON body from stdin.")
     save_command.set_defaults(func=_save)
+    remove_command = commands.add_parser(
+        "remove-deck",
+        help="Stop tracking decks and delete their notes from the index. Reads a JSON body from stdin.",
+    )
+    remove_command.set_defaults(func=_remove_deck)
 
     args = parser.parse_args(argv)
     config = load_config(args.config)
@@ -151,6 +164,14 @@ def _preview(config: Config, args: argparse.Namespace) -> None:
 def _save(config: Config, args: argparse.Namespace) -> None:
     del args
     result = save(config, _stdin_json())
+    _emit(result)
+    if not result.get("ok", False):
+        raise SystemExit(1)
+
+
+def _remove_deck(config: Config, args: argparse.Namespace) -> None:
+    del args
+    result = remove_deck(config, _stdin_json())
     _emit(result)
     if not result.get("ok", False):
         raise SystemExit(1)

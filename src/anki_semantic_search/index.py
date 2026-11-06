@@ -339,19 +339,57 @@ def _in_scope(row: dict, decks: Sequence[str]) -> bool:
     return any(name == deck or name.startswith(f"{deck}::") for name in stored for deck in decks if deck)
 
 
+def indexed_decks(config: Config) -> list[str]:
+    """Deck names recorded by the last sync or removal, in the order they were added."""
+    meta = _read_meta(config)
+    return [str(name) for name in (meta.get("configuration") or {}).get("decks") or [] if str(name)]
+
+
+def remove_decks(config: Config, decks: Sequence[str], *, remaining: Sequence[str]) -> int:
+    """Delete the indexed notes of `decks`, and return how many were deleted.
+
+    A note that is also in one of the `remaining` tracked decks stays. Notes are
+    matched by the deck names stored at the last sync, including nested decks.
+    """
+    removed_decks = [name for name in decks if name]
+    deleted = 0
+    if removed_decks and config.data_dir.is_dir():
+        db = lancedb.connect(str(config.data_dir))
+        existing = _read_existing(db)
+        stale = [
+            note_id
+            for note_id, row in existing.items()
+            if _in_scope(row, removed_decks) and not _in_scope(row, remaining)
+        ]
+        if stale:
+            db.open_table(TABLE_NAME).delete(f"note_id IN ({', '.join(str(note_id) for note_id in stale)})")
+            deleted = len(stale)
+    meta = _read_meta(config)
+    if meta:
+        configuration = dict(meta.get("configuration") or {})
+        configuration["decks"] = [name for name in configuration.get("decks") or [] if name not in removed_decks]
+        meta["configuration"] = configuration
+        meta["note_count"] = max(int(meta.get("note_count") or 0) - deleted, 0)
+        (config.data_dir / _META_NAME).write_text(json.dumps(meta), encoding="utf-8")
+    return deleted
+
+
+def _read_meta(config: Config) -> dict:
+    meta_path = config.data_dir / _META_NAME
+    if not meta_path.is_file():
+        return {}
+    try:
+        return json.loads(meta_path.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        return {}
+
+
 def _indexed_decks(config: Config, kept: dict[int, dict], *, keep_previous: bool) -> list[str]:
     """The chosen decks, plus earlier decks that still have notes in the index."""
     decks = list(config.decks)
     if not keep_previous:
         return decks
-    meta_path = config.data_dir / _META_NAME
-    previous: list[str] = []
-    if meta_path.is_file():
-        try:
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
-            previous = list((meta.get("configuration") or {}).get("decks") or [])
-        except (ValueError, OSError):
-            previous = []
+    previous = indexed_decks(config)
     rows = list(kept.values())
     for deck in previous:
         if deck not in decks and any(_in_scope(row, (deck,)) for row in rows):

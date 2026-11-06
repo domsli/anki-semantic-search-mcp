@@ -119,6 +119,86 @@ section {
   margin: 6px 0;
 }
 
+.deck-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.deck-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.deck-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.deck-status {
+  font-size: 0.9em;
+  color: #12b76a;
+}
+
+.deck-status.pending {
+  color: color-mix(in srgb, currentColor 65%, transparent);
+}
+
+.deck-list button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 12px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+}
+
+.tabs [role="tab"] {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+
+.tabs [role="tab"].selected {
+  border-color: color-mix(in srgb, currentColor 20%, transparent);
+  background: Canvas;
+  font-weight: 650;
+}
+
+.tab-mode {
+  font-size: 0.8em;
+  font-weight: normal;
+  color: color-mix(in srgb, currentColor 60%, transparent);
+}
+
+.tab-panel {
+  padding-top: 8px;
+}
+
+button.save {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 .mode {
   align-items: center;
   margin: 8px 0;

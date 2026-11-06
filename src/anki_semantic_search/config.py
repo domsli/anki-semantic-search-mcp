@@ -82,9 +82,7 @@ def save_settings(
     note_types: dict[str, dict] | None = None,
 ) -> Config:
     """Write decks and note-type maps. Other settings in the file stay put."""
-    chosen = [str(name) for name in decks if str(name).strip()]
-    if not chosen:
-        raise ValueError("Choose at least one deck.")
+    chosen = list(dict.fromkeys(str(name) for name in decks if str(name).strip()))
     if not path.is_file():
         raise ValueError("Couldn't find your settings.")
 

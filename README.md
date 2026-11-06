@@ -4,7 +4,7 @@ This is a local MCP server for your Japanese Anki decks. You ask ChatGPT somethi
 
 An input card is one word: Japanese on the front, and a definition in Japanese or English on the back. The server embeds that word and definition on your machine. ChatGPT only receives the closest matches. The decks and the vectors stay local.
 
-The vector database does not follow Anki on its own. Cards you add, edit, delete, or review reach search only after you press **Update deck** in the desktop window while Anki is open. Search keeps working after you close Anki.
+The vector database does not follow Anki on its own. Cards you add, edit, delete, or review reach search only after you press **Update decks** in the desktop window while Anki is open. Search keeps working after you close Anki.
 
 To install the app and work on it, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -52,14 +52,14 @@ type Hit = {
 };
 ```
 
-Omitted filters are off. Review data is as of the last Update deck. `max_interval_days` leaves out cards that were never studied.
+Omitted filters are off. Review data is as of the last Update decks. `max_interval_days` leaves out cards that were never studied.
 
 `message` is set instead of hits when:
 
 - `query` is empty, or a filter value is out of range.
 - The index is empty.
 - The filters left nothing, but matching notes exist without them. The message names the filters and how to loosen them.
-- A filter needs a column the index does not have yet. Press Update deck once to add it.
+- A filter needs a column the index does not have yet. Press Update decks once to add it.
 - No notes match in the given decks, or at all.
 
 ### `list_decks`
@@ -67,7 +67,7 @@ Omitted filters are off. Review data is as of the last Update deck. `max_interva
 ```ts
 list_decks(): {
   decks: string[];                // every deck name in the index, including nested decks
-  last_synced_at: string | null;  // last Update deck, ISO 8601 UTC
+  last_synced_at: string | null;  // last Update decks, ISO 8601 UTC
   note_count: number;
   message?: string;               // set when the index is empty
 }
@@ -81,15 +81,15 @@ Install the [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on and
 
 One button starts and stops the server. It shows a spinner while the server starts or stops, and a green dot while it runs. If the server was started outside the window, for example with `anki-search serve`, the button says so and cannot stop it. The address is `http://127.0.0.1:8000/mcp`. ChatGPT can keep searching after you close Anki, as long as the server stays on.
 
-### Put a deck in the vector database
+### Put decks in the vector database
 
-1. **Deck.** Choose one deck. A deck includes the decks inside it. Updating adds the deck to search, and decks you updated before stay searchable. The choice waits until you update the deck.
-2. **Fields.** Optional. The marked fields of each card are combined into the text stored in the vector database, and search measures the distance between your question and that text. For each card type, set every field to **Word**, **Reading**, **Definition**, **Include**, **Ignore**, or **Leave out**. The last two keep a field out of search.
+1. **Decks.** The list shows every deck kept in the vector database, and whether each one is in search yet. A deck includes the decks inside it. **Add deck** puts a deck on the list; it reaches search at the next Update decks. **Remove** takes a deck off the list and deletes its cards from the vector database right away. Anki is not changed, and a card that is also in another listed deck stays.
+2. **Card indexing configuration.** Optional. There is a tab for each card type used in the listed decks. Pick one to see its fields. The marked fields are combined into the text stored in the vector database, and search measures the distance between your question and that text. Set each field to **Word**, **Reading**, **Definition**, **Include**, **Ignore**, or **Leave out**. The last two keep a field out of search.
 
-   A card type marked *(default)* uses fields matched by usual names such as Front, Expression, or Meaning, and the window shows what they matched. Change any field and the card type becomes *(custom)*: only its marked fields are used, and a grey note shows the default next to each field you changed. **Reset to default** undoes that. **Save configuration** remembers the fields without updating the deck.
-3. **Vector database.** **Update deck** applies the fields and reads the deck from Anki. Anki needs to be open. Only new and changed cards are embedded again. **See missed updates** lists what Update deck would pick up. **Re-index deck** embeds every card in the deck again, which takes longer.
+   Settings belong to the card type, and apply in every deck that uses it. A *default* card type uses fields matched by usual names such as Front, Expression, or Meaning, and the window shows what they matched. Change any field and the card type becomes *custom*: only its marked fields are used, and a grey note shows the default next to each field you changed. **Reset to default** undoes that. **Save changes** stores the settings, and is greyed out when nothing is unsaved. Update decks also saves them.
+3. **Vector database.** **Update decks** applies the fields and reads every listed deck from Anki. Anki needs to be open. Only new and changed cards are embedded again. **See missed updates** lists what Update decks would pick up. **Re-index decks** embeds every card in every listed deck again, which takes longer.
 
-   This section also lists the decks in search and the field settings they were indexed with, and flags a chosen deck or field change that is not in search yet.
+   This section also lists the field settings the decks were indexed with, and flags a deck or field change that is not in search yet.
 
 ## Connect ChatGPT
 
@@ -157,6 +157,6 @@ Do this once, while `run` is connected.
 
 - **ChatGPT cannot find tools, or calls fail.** Check that the MCP server and `tunnel-client run` are both still running, then run `doctor --explain` again.
 - **The tunnel is not in ChatGPT's list.** The tunnel is not associated with your ChatGPT workspace, or your account lacks the Tunnels Use permission.
-- **Searches return nothing.** Ask ChatGPT to call `list_decks`. An empty list means no deck has been updated yet. Press Update deck in the window.
+- **Searches return nothing.** Ask ChatGPT to call `list_decks`. An empty list means no deck has been updated yet. Press Update decks in the window.
 
 In a chat, invoke the plugin with `@` and ask for a word you learned. The server tells ChatGPT to call `search_notes`, and to use `learned_within_days=30` when you say "recently."

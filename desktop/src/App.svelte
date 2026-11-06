@@ -10,7 +10,8 @@
 
   let ankiOpen = $state(false);
   let decks = $state([]);
-  let deck = $state("");
+  let tracked = $state([]);
+  let removing = $state("");
   let dirty = $state(false);
   let noteTypes = $state([]);
   let noteTypeName = $state("");
@@ -32,8 +33,7 @@
   let diffError = $state(false);
   let progress = $state("");
   let progressError = $state(false);
-  let saveProgress = $state("");
-  let saveError = $state(false);
+  let saveError = $state("");
   let savedConfiguration = $state({ decks: [], note_types: {} });
   let indexedConfiguration = $state(null);
   let vectorUpdated = $state(false);
@@ -49,8 +49,14 @@
   let current = $derived(noteTypes.find((item) => item.name === noteTypeName) ?? null);
 
   function chosenDecks() {
-    return deck ? [deck] : [];
+    return [...tracked];
   }
+
+  function sameDecks(a, b) {
+    return a.length === b.length && a.every((name) => b.includes(name));
+  }
+
+  let indexedDecks = $derived(indexedConfiguration?.decks || []);
 
   function draftConfiguration() {
     return {
@@ -73,7 +79,7 @@
     }
     const savedDecks = savedConfiguration.decks || [];
     if (!typesReady) {
-      dirty = savedDecks.length !== 1 || savedDecks[0] !== deck;
+      dirty = !sameDecks(savedDecks, tracked);
       return;
     }
     dirty = configurationDifferences(savedConfiguration, draftConfiguration()).length > 0;
@@ -87,20 +93,51 @@
     indexedConfiguration = status.indexed_configuration || null;
   }
 
-  async function chooseDeck(name) {
-    if (name === deck) return;
-    deck = name;
+  async function reloadForDecks() {
     refreshing = true;
     try {
       await loadCardTypes();
     } finally {
       markDirty();
       refreshing = false;
-      if (!ankiError) {
-        ankiState = ankiOpen
-          ? "Anki is open."
-          : "Anki is closed.";
+      if (!ankiError) ankiState = ankiOpen ? "Anki is open." : "Anki is closed.";
+    }
+  }
+
+  async function addDeck(name) {
+    if (!name || tracked.includes(name)) return;
+    tracked = [...tracked, name];
+    await reloadForDecks();
+  }
+
+  async function removeDeck(name) {
+    const stored = savedConfiguration.decks?.includes(name) || indexedDecks.includes(name);
+    if (!stored) {
+      // Added in this window and never saved: nothing to delete.
+      tracked = tracked.filter((item) => item !== name);
+      await reloadForDecks();
+      return;
+    }
+    const question = indexedDecks.includes(name)
+      ? `Remove ${name}? Its cards are deleted from the vector database. Anki is not changed.`
+      : `Remove ${name}?`;
+    if (!window.confirm(question)) return;
+    removing = name;
+    progressError = false;
+    try {
+      const result = await window.anki.api("remove-deck", { decks: [name] });
+      if (!result.ok) {
+        progress = result.error || "Couldn't remove the deck.";
+        progressError = true;
+        return;
       }
+      applyStatus(result);
+      tracked = tracked.filter((item) => item !== name);
+      const count = result.deleted === 1 ? "1 card" : `${result.deleted} cards`;
+      progress = `Removed ${name}. ${count} deleted from the vector database.`;
+      await reloadForDecks();
+    } finally {
+      removing = "";
     }
   }
 
@@ -187,13 +224,13 @@
   }
 
   async function loadCardTypes() {
-    if (!ankiOpen || !deck) {
+    if (!ankiOpen || !tracked.length) {
       loadingTypes = false;
       typesReady = false;
       noteTypes = [];
       noteTypeName = "";
       previewError = false;
-      preview = ankiOpen ? "Choose a deck." : "Open Anki.";
+      preview = ankiOpen ? "Add a deck." : "Open Anki.";
       return;
     }
     loadingTypes = true;
@@ -217,11 +254,13 @@
     if (active && ankiOpen) {
       ankiState = "Loading an example…";
       await refreshPreview(active);
-      return;
     }
-    previewError = false;
-    if (ankiOpen) preview = "No card types.";
-    else preview = "Open Anki.";
+  }
+
+  function chooseType(name) {
+    if (name === noteTypeName) return;
+    noteTypeName = name;
+    refreshPreview();
   }
 
   async function refresh() {
@@ -240,7 +279,7 @@
       const deckResult = await window.anki.api("decks");
       ankiOpen = Boolean(deckResult.anki_open);
       decks = deckResult.decks || [];
-      deck = deckResult.selected?.[0] || "";
+      tracked = deckResult.tracked || [];
       ready = true;
       await loadCardTypes();
       markDirty();
@@ -257,10 +296,7 @@
 
   async function save({ announce = true } = {}) {
     saving = true;
-    if (announce) {
-      saveError = false;
-      saveProgress = "Saving…";
-    }
+    if (announce) saveError = "";
     try {
       const payload = { decks: chosenDecks() };
       if (ankiOpen) {
@@ -273,8 +309,7 @@
       if (!result.ok) {
         const message = result.error || "Couldn't save.";
         if (announce) {
-          saveProgress = message;
-          saveError = true;
+          saveError = message;
         } else {
           progress = message;
           progressError = true;
@@ -283,10 +318,6 @@
       }
       applyStatus(result);
       markDirty();
-      if (announce) {
-        saveError = false;
-        saveProgress = "Saved.";
-      }
       return true;
     } finally {
       saving = false;
@@ -322,13 +353,13 @@
   }
 
   async function runSync(rebuild) {
-    if (rebuild && !window.confirm("Re-index every card in this deck? This can take a while.")) return;
+    if (rebuild && !window.confirm("Re-index every card in every deck? This can take a while.")) return;
     syncing = true;
     progressError = false;
       progress = "Saving…";
     try {
       if (!(await save({ announce: false }))) return;
-      progress = rebuild ? "Re-indexing the deck…" : "Updating the deck…";
+      progress = rebuild ? "Re-indexing the decks…" : "Updating the decks…";
       const result = await window.anki.sync(rebuild);
       if (!result.ok) {
         progress = result.error || "Update failed.";
@@ -394,22 +425,31 @@
     busyLabel={serverBusyLabel}
     onToggle={toggleServer}
   />
-  <Decks {decks} {deck} {dirty} onChoose={chooseDeck} />
+  <Decks
+    {decks}
+    {tracked}
+    indexed={indexedDecks}
+    {ankiOpen}
+    {removing}
+    busy={syncing || comparing || saving || refreshing || Boolean(removing)}
+    onAdd={addDeck}
+    onRemove={removeDeck}
+  />
   <Fields
+    hasDecks={tracked.length > 0}
     {noteTypes}
-    bind:noteTypeName
+    {noteTypeName}
     {ankiOpen}
     {preview}
     {previewError}
     {previewing}
     {loadingTypes}
-    {deck}
+    {dirty}
     {saving}
     {syncing}
     {comparing}
-    {saveProgress}
     {saveError}
-    onChange={refreshPreview}
+    onType={chooseType}
     onEdit={onFieldsChange}
     onSave={save}
   />
@@ -422,7 +462,7 @@
     {syncing}
     {comparing}
     {saving}
-    {deck}
+    hasDecks={tracked.length > 0}
     {indexedConfiguration}
     {vectorUpdated}
     {configDifferences}

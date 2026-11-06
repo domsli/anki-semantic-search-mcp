@@ -172,7 +172,7 @@ def search_notes(
         return SearchResponse(
             (),
             "The index was built before these filters existed. "
-            "Ask the user to press Update deck in the desktop window once, then search again.",
+            "Ask the user to press Update decks in the desktop window once, then search again.",
         )
 
     embedder = embedder or FastEmbedEmbedder(config.embedding_model)

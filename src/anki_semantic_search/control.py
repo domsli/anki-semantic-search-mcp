@@ -7,7 +7,7 @@ from pathlib import Path
 
 from anki_semantic_search.anki import AnkiClient, AnkiError
 from anki_semantic_search.config import Config, FieldMap, save_settings
-from anki_semantic_search.index import _META_NAME, diff_index
+from anki_semantic_search.index import _META_NAME, diff_index, indexed_decks, remove_decks
 from anki_semantic_search.normalize import normalize_for_config, normalize_note
 
 _ROLES = ("word", "reading", "definition", "extra", "skip")
@@ -36,26 +36,43 @@ def status(config: Config) -> dict:
 
 
 def list_decks(config: Config) -> dict:
+    tracked = tracked_decks(config)
     try:
         with AnkiClient(config.anki_url, config.anki_api_key) as client:
             live = client.deck_names()
     except AnkiError as exc:
-        return {"ok": True, "anki_open": False, "error": str(exc), "decks": list(config.decks), "selected": list(config.decks)}
-    return {"ok": True, "anki_open": True, "decks": live, "selected": selected_decks(live, list(config.decks)), "live": live}
+        return {"ok": True, "anki_open": False, "error": str(exc), "decks": [], "tracked": tracked}
+    return {"ok": True, "anki_open": True, "decks": live, "tracked": tracked}
 
 
-def selected_decks(live: list[str], saved: list[str]) -> list[str]:
-    """One deck. Keep the first saved deck that still exists, or pick a real deck."""
-    present = {name for name in live}
-    chosen = [name for name in saved if name in present]
-    if chosen:
-        return [chosen[0]]
-    if not live:
-        return []
-    for name in live:
-        if name != "Default":
-            return [name]
-    return [live[0]]
+def tracked_decks(config: Config) -> list[str]:
+    """Decks in config.toml, plus decks that are in the index but missing from it.
+
+    Older versions searched one deck at a time, so the index can hold decks the
+    config no longer names. Listing them lets the window keep or remove them.
+    """
+    tracked = list(config.decks)
+    for name in indexed_decks(config):
+        if name not in tracked:
+            tracked.append(name)
+    return tracked
+
+
+def remove_deck(config: Config, payload: dict) -> dict:
+    """Stop tracking decks, and delete their notes from the vector database."""
+    path = config.path
+    if path is None:
+        return {"ok": False, "error": "Couldn't save your settings."}
+    removed = [str(name) for name in payload.get("decks") or [] if str(name)]
+    if not removed:
+        return {"ok": False, "error": "Name a deck to remove."}
+    remaining = [name for name in tracked_decks(config) if name not in removed]
+    try:
+        updated = save_settings(path, decks=remaining)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
+    deleted = remove_decks(updated, removed, remaining=remaining)
+    return {**status(updated), "deleted": deleted}
 
 
 def list_note_types(config: Config, decks: list[str] | None = None) -> dict:
