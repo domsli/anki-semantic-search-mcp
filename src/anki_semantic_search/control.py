@@ -152,7 +152,7 @@ def _roles_for(field_names: list[str], field_map: FieldMap, *, leftovers: bool) 
     claimed: set[str] = set()
     for field_name in field_names:
         if _matches(field_name, field_map.skip):
-            roles[field_name] = "skip"
+            roles[field_name] = "unassigned"  # shown as Ignore
             claimed.add(field_name)
     for role in ("word", "reading", "definition", "extra"):
         names = getattr(field_map, role)

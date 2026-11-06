@@ -194,7 +194,7 @@ class NoteTypeRoleTests(unittest.TestCase):
 
     def test_default_card_type_shows_the_default_roles(self) -> None:
         item = self._list(self._config({}))
-        expected = {"Front": "word", "Back": "definition", "Audio": "skip", "Notes": "extra"}
+        expected = {"Front": "word", "Back": "definition", "Audio": "unassigned", "Notes": "extra"}
         self.assertFalse(item["mapped"])
         self.assertEqual(item["roles"], expected)
         self.assertEqual(item["default_roles"], expected)

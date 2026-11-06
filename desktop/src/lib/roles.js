@@ -1,9 +1,10 @@
-const ASSIGNED = ["word", "reading", "definition", "extra", "skip"];
+// "unassigned" is shown as Ignore: the field stays out of the vector database.
+const ASSIGNED = ["word", "reading", "definition", "extra"];
 
 export const ROLES = [...ASSIGNED, "unassigned"];
 
 export function roleLists(item) {
-  const lists = { word: [], reading: [], definition: [], extra: [], skip: [] };
+  const lists = { word: [], reading: [], definition: [], extra: [] };
   for (const field of item.fields) {
     const role = item.roles?.[field] || "unassigned";
     if (lists[role]) lists[role].push(field);

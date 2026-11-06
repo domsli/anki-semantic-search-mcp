@@ -1,12 +1,12 @@
-const ROLE_ORDER = ["word", "reading", "definition", "extra", "skip"];
+// A saved skip list changes nothing for a custom card type, so it is not shown.
+const ROLE_ORDER = ["word", "reading", "definition", "extra"];
 
 export const ROLE_LABELS = {
   word: "Word",
   reading: "Reading",
   definition: "Definition",
   extra: "Include",
-  skip: "Ignore",
-  unassigned: "Leave out",
+  unassigned: "Ignore",
 };
 
 export function fieldRoles(map) {
