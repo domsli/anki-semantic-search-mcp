@@ -1,24 +1,37 @@
-# Anki Semantic Search
+# Anki Semantic Search MCP
 
-This is a local MCP server for your Japanese Anki deck. You ask ChatGPT something like "what's a word I recently learned that means feeling nervous," and it looks the word up in your cards instead of guessing.
+This is a local MCP server for your Japanese Anki decks. You ask ChatGPT something like "what's a word I recently learned that means feeling nervous," and it looks the word up in your cards instead of guessing.
 
-An input card is one word: Japanese on the front, and a definition in Japanese or English on the back. The server embeds that word and definition on your machine. ChatGPT only receives the closest matches. The deck and the vectors stay local.
+An input card is one word: Japanese on the front, and a definition in Japanese or English on the back. The server embeds that word and definition on your machine. ChatGPT only receives the closest matches. The decks and the vectors stay local.
 
-Reopening Anki does not refresh the index. Sync from the desktop window while Anki is open. Search keeps working after you close Anki.
+The vector database does not follow Anki on its own. Cards you add, edit, delete, or review reach search only after you press **Update deck** in the desktop window while Anki is open. Search keeps working after you close Anki.
 
 To install the app and work on it, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Tools
+
+- `list_decks` returns indexed deck names and when a deck was last updated.
+- `search_notes` returns the word, the definition in the language on the card, the deck, tags, when you first studied it, and a score.
+
+Both tools are read-only.
+
 ## Desktop window
 
-Install the [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on and open Anki, then open the desktop window.
+Install the [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on and open Anki, then open the desktop window. **Refresh**, at the top right, checks Anki and the server again.
 
-**MCP server** is at the top. One button starts and stops it, and shows whether it is running. The address is `http://127.0.0.1:8000/mcp`. ChatGPT can keep searching after you close Anki, as long as the server stays on.
+### MCP server
 
-Below it, three steps put a deck in the vector database:
+One button starts and stops the server. It shows a spinner while the server starts or stops, and a green dot while it runs. If the server was started outside the window, for example with `anki-search serve`, the button says so and cannot stop it. The address is `http://127.0.0.1:8000/mcp`. ChatGPT can keep searching after you close Anki, as long as the server stays on.
 
-1. **Choose a deck.** Search updates one deck at a time. A deck includes the decks inside it. Updating adds the deck to search, and decks you updated before stay searchable. The choice waits until you update the deck.
-2. **Check the fields.** Optional. For each card type, the window shows which box is used as the word, the definition, and so on. Every card type starts with the default fields, matched by usual names such as Front, Expression, or Meaning. Change any box and that card type becomes custom. Only its marked boxes are used. Reset to default undoes that. Save configuration remembers the fields without updating search.
-3. **Update deck.** This is the button that applies the fields and reads Anki. Anki needs to be open. The vector database does not follow Anki on its own: cards you add, edit, delete, or review appear in search only after Update deck. See missed updates lists the changes it would pick up. Re-index deck embeds every card in the deck again.
+### Put a deck in the vector database
+
+1. **Deck.** Choose one deck. A deck includes the decks inside it. Updating adds the deck to search, and decks you updated before stay searchable. The choice waits until you update the deck.
+2. **Fields.** Optional. The marked fields of each card are combined into the text stored in the vector database, and search measures the distance between your question and that text. For each card type, set every field to **Word**, **Reading**, **Definition**, **Include**, **Ignore**, or **Leave out**. The last two keep a field out of search.
+
+   A card type marked *(default)* uses fields matched by usual names such as Front, Expression, or Meaning, and the window shows what they matched. Change any field and the card type becomes *(custom)*: only its marked fields are used, and a grey note shows the default next to each field you changed. **Reset to default** undoes that. **Save configuration** remembers the fields without updating the deck.
+3. **Vector database.** **Update deck** applies the fields and reads the deck from Anki. Anki needs to be open. Only new and changed cards are embedded again. **See missed updates** lists what Update deck would pick up. **Re-index deck** embeds every card in the deck again, which takes longer.
+
+   This section also lists the decks in search and the field settings they were indexed with, and flags a chosen deck or field change that is not in search yet.
 
 ## Connect ChatGPT
 
@@ -86,13 +99,6 @@ Do this once, while `run` is connected.
 
 - **ChatGPT cannot find tools, or calls fail.** Check that the MCP server and `tunnel-client run` are both still running, then run `doctor --explain` again.
 - **The tunnel is not in ChatGPT's list.** The tunnel is not associated with your ChatGPT workspace, or your account lacks the Tunnels Use permission.
-- **Searches return nothing.** Ask ChatGPT to call `list_decks`. An empty list means search has not been updated yet.
+- **Searches return nothing.** Ask ChatGPT to call `list_decks`. An empty list means no deck has been updated yet. Press Update deck in the window.
 
 In a chat, invoke the plugin with `@` and ask for a word you learned. The server tells ChatGPT to call `search_notes`, and to use `learned_within_days=30` when you say "recently."
-
-## Tools
-
-- `list_decks` returns indexed deck names and the last sync time.
-- `search_notes` returns the word, the definition in the language on the card, the deck, tags, when you first studied it, and a score.
-
-Both tools are read-only.
