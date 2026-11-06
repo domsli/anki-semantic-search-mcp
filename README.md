@@ -10,10 +10,68 @@ To install the app and work on it, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Tools
 
-- `list_decks` returns indexed deck names and when a deck was last updated.
-- `search_notes` returns the word, the definition in the language on the card, the deck, tags, when you first studied it, and a score.
+The server exposes two read-only MCP tools at `http://127.0.0.1:8000/mcp`. ChatGPT picks the arguments from how you ask. For example, "words I keep forgetting" sets `min_lapses`.
 
-Both tools are read-only.
+### `search_notes`
+
+Finds the notes closest to `query` by meaning and by spelling. Filters run before ranking, and every filter you pass must match.
+
+```ts
+search_notes(args: {
+  query: string;                  // required: a word, phrase, or meaning
+  decks?: string[];               // deck names; each includes the decks inside it
+  learned_within_days?: number;   // first review in the last N days        (N >= 1)
+  reviewed_within_days?: number;  // last review in the last N days         (N >= 1)
+  added_within_days?: number;     // card created in the last N days        (N >= 1)
+  edited_within_days?: number;    // note edited in the last N days         (N >= 1)
+  min_lapses?: number;            // forgotten at least N times             (N >= 0)
+  max_interval_days?: number;     // studied, interval at most N days       (N >= 0)
+  suspended?: boolean;            // true: only suspended; false: none suspended
+  limit?: number;                 // default 8, clamped to 1..25
+}): {
+  hits: Hit[];
+  message?: string;               // why hits is empty, and what to try next
+}
+
+type Hit = {
+  word: string;
+  reading: string;
+  definition: string;             // in the language on the card
+  extra: string;                  // other included fields
+  decks: string[];
+  tags: string[];
+  added_at: string | null;        // dates are ISO 8601 UTC, e.g. "2026-11-04T08:30:00Z"
+  introduced_at: string | null;   // first review
+  last_reviewed_at: string | null;
+  modified_at: string | null;     // null if AnkiConnect does not report edit times
+  review_count: number;           // manual reschedules are not counted
+  lapses: number;                 // summed over the note's cards
+  interval_days: number;          // longest interval among the note's cards
+  suspended: boolean;             // true when every card is suspended
+  score: number;                  // higher is closer
+};
+```
+
+Omitted filters are off. Review data is as of the last Update deck. `max_interval_days` leaves out cards that were never studied.
+
+`message` is set instead of hits when:
+
+- `query` is empty, or a filter value is out of range.
+- The index is empty.
+- The filters left nothing, but matching notes exist without them. The message names the filters and how to loosen them.
+- A filter needs a column the index does not have yet. Press Update deck once to add it.
+- No notes match in the given decks, or at all.
+
+### `list_decks`
+
+```ts
+list_decks(): {
+  decks: string[];                // every deck name in the index, including nested decks
+  last_synced_at: string | null;  // last Update deck, ISO 8601 UTC
+  note_count: number;
+  message?: string;               // set when the index is empty
+}
+```
 
 ## Desktop window
 

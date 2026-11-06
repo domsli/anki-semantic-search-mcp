@@ -310,12 +310,12 @@
       }
       diffError = false;
       const examples = result.examples || {};
-      const labels = { embed: "New or changed", update: "Review dates", remove: "Removed" };
+      const labels = { embed: "New or changed", update: "Review details", remove: "Removed" };
       const sample = Object.entries(labels)
         .filter(([key]) => (examples[key] || []).length)
         .map(([key, label]) => `${label}: ${examples[key].join(", ")}`)
         .join(" · ");
-      diff = `${result.would_embed} new or changed, ${result.would_update} review dates, ${result.unchanged} current, ${result.would_remove} removed.${sample ? ` ${sample}` : ""}`;
+      diff = `${result.would_embed} new or changed, ${result.would_update} review details, ${result.unchanged} current, ${result.would_remove} removed.${sample ? ` ${sample}` : ""}`;
     } finally {
       comparing = false;
     }

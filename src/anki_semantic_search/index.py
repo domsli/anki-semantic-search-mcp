@@ -195,6 +195,7 @@ def sync_index(
 
     config.data_dir.mkdir(parents=True, exist_ok=True)
     db = lancedb.connect(str(config.data_dir))
+    _add_missing_columns(db)
     existing = _read_existing(db)
     # A new model makes every stored vector incompatible, so the table starts over.
     # A rebuild only re-embeds the chosen decks and keeps the others.
@@ -404,7 +405,6 @@ def _ensure_indexes(table) -> None:
 
 
 def _row(note: NormalizedNote, vector: list[float], model_name: str, digest: str) -> dict:
-    decks, tags, introduced = _metadata(note)
     return {
         "note_id": note.note_id,
         "vector": vector,
@@ -415,24 +415,68 @@ def _row(note: NormalizedNote, vector: list[float], model_name: str, digest: str
         "reading": note.reading,
         "definition": note.definition,
         "extra": note.extra,
-        "deck_names": decks,
-        "tags": tags,
         "note_type": note.model_name,
         "added_at": _iso(note.added_at),
-        "introduced_at": introduced,
+        **_metadata(note),
     }
 
 
-def _metadata(note: NormalizedNote) -> tuple[str, str, str]:
-    return (
-        json.dumps(list(note.deck_names), ensure_ascii=False),
-        json.dumps(list(note.tags), ensure_ascii=False),
-        _iso(note.introduced_at),
-    )
+def _metadata(note: NormalizedNote) -> dict:
+    """Columns that can change without changing the passage. They never need a new vector."""
+    study = note.study
+    return {
+        "deck_names": json.dumps(list(note.deck_names), ensure_ascii=False),
+        "tags": json.dumps(list(note.tags), ensure_ascii=False),
+        "introduced_at": _iso(note.introduced_at),
+        "modified_at": _iso(study.modified_at),
+        "last_reviewed_at": _iso(study.last_reviewed_at),
+        "review_count": study.review_count,
+        "lapses": study.lapses,
+        "interval_days": study.interval_days,
+        "suspended": study.suspended,
+    }
 
 
-def _stored_metadata(row: dict) -> tuple[str, str, str]:
-    return (str(row["deck_names"]), str(row["tags"]), str(row["introduced_at"] or ""))
+def _stored_metadata(row: dict) -> dict:
+    stored = {}
+    for name, default in _METADATA_DEFAULTS.items():
+        value = row.get(name)
+        stored[name] = default if value is None else type(default)(value)
+    return stored
+
+
+# Columns added after the first release, with the value an existing row gets.
+_ADDED_COLUMNS = {
+    "modified_at": "CAST('' AS STRING)",
+    "last_reviewed_at": "CAST('' AS STRING)",
+    "review_count": "CAST(0 AS BIGINT)",
+    "lapses": "CAST(0 AS BIGINT)",
+    "interval_days": "CAST(0 AS BIGINT)",
+    "suspended": "CAST(false AS BOOLEAN)",
+}
+
+_METADATA_DEFAULTS = {
+    "deck_names": "[]",
+    "tags": "[]",
+    "introduced_at": "",
+    "modified_at": "",
+    "last_reviewed_at": "",
+    "review_count": 0,
+    "lapses": 0,
+    "interval_days": 0,
+    "suspended": False,
+}
+
+
+def _add_missing_columns(db: lancedb.DBConnection) -> None:
+    """Give a table from an older version the newer columns, without touching vectors."""
+    if not _has_table(db):
+        return
+    table = db.open_table(TABLE_NAME)
+    present = set(table.schema.names)
+    missing = {name: expression for name, expression in _ADDED_COLUMNS.items() if name not in present}
+    if missing:
+        table.add_columns(missing)
 
 
 def _as_floats(vector: object) -> list[float]:

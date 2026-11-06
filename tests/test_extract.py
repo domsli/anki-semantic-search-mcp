@@ -136,18 +136,24 @@ class AnkiClientTests(unittest.TestCase):
                             "Front": {"value": "そわそわ", "order": 0},
                             "Back": {"value": "nervous", "order": 1},
                         },
-                        "cards": [50],
+                        "cards": [50, 51],
+                        "mod": 1_760_000_000,
                     }
                 ]
             elif action == "cardsInfo":
-                result = [{"cardId": 50, "deckName": "Japanese"}]
+                result = [
+                    {"cardId": 50, "deckName": "Japanese", "lapses": 1, "interval": 12, "queue": 2},
+                    {"cardId": 51, "deckName": "Japanese", "lapses": 2, "interval": -600, "queue": -1},
+                ]
             elif action == "getReviewsOfCards":
-                self.assertEqual(body["params"]["cards"], ["50"])
+                self.assertEqual(body["params"]["cards"], ["50", "51"])
                 result = {
                     "50": [
                         {"id": 1_800_000_000_000, "ease": 3},
                         {"id": 1_750_000_000_000, "ease": 2},
-                    ]
+                    ],
+                    # A manual reschedule is not a review.
+                    "51": [{"id": 1_700_000_000_500, "ease": 0}, {"id": 1_790_000_000_000, "ease": 1}],
                 }
             else:
                 raise AssertionError(action)
@@ -170,6 +176,13 @@ class AnkiClientTests(unittest.TestCase):
         self.assertEqual(normalized.word, "そわそわ")
         self.assertEqual(normalized.definition, "nervous")
         self.assertEqual(normalized.introduced_at, note.introduced_at)
+
+        study = note.study
+        self.assertEqual(study.last_reviewed_at, datetime.fromtimestamp(1_800_000_000, tz=timezone.utc))
+        self.assertEqual(study.modified_at, datetime.fromtimestamp(1_760_000_000, tz=timezone.utc))
+        self.assertEqual((study.review_count, study.lapses, study.interval_days), (3, 3, 12))
+        self.assertFalse(study.suspended)
+        self.assertEqual(normalized.study, study)
 
     def test_api_error_is_raised(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:

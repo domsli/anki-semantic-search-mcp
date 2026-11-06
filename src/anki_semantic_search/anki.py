@@ -17,6 +17,23 @@ class AnkiError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class StudyStats:
+    """Review details for one note, summed over its cards.
+
+    Manual reschedules in the review log (ease 0) are not counted as reviews.
+    """
+
+    modified_at: datetime | None = None
+    last_reviewed_at: datetime | None = None
+    review_count: int = 0
+    lapses: int = 0
+    # The longest interval, in days, among the note's cards.
+    interval_days: int = 0
+    # True when every card of the note is suspended.
+    suspended: bool = False
+
+
+@dataclass(frozen=True)
 class RawNote:
     note_id: int
     model_name: str
@@ -26,6 +43,7 @@ class RawNote:
     card_ids: tuple[int, ...]
     added_at: datetime
     introduced_at: datetime | None
+    study: StudyStats = StudyStats()
 
 
 class AnkiClient:
@@ -86,14 +104,27 @@ class AnkiClient:
                 card_to_note[int(card_id)] = note_id
 
         decks_by_note: dict[int, list[str]] = {note_id: [] for note_id in info_by_id}
+        lapses: dict[int, int] = {}
+        interval_days: dict[int, int] = {}
+        unsuspended: set[int] = set()
         for batch in _batches(list(card_to_note)):
             for card in self.invoke("cardsInfo", cards=batch) or []:
                 note_id = card_to_note.get(int(card["cardId"]))
+                if note_id is None:
+                    continue
                 deck_name = str(card.get("deckName") or "")
-                if note_id is not None and deck_name and deck_name not in decks_by_note[note_id]:
+                if deck_name and deck_name not in decks_by_note[note_id]:
                     decks_by_note[note_id].append(deck_name)
+                lapses[note_id] = lapses.get(note_id, 0) + int(card.get("lapses") or 0)
+                # A negative interval is a learning step in seconds, not days.
+                interval = max(int(card.get("interval") or 0), 0)
+                interval_days[note_id] = max(interval_days.get(note_id, 0), interval)
+                if int(card.get("queue", 0)) != -1:
+                    unsuspended.add(note_id)
 
         first_review_ms: dict[int, int] = {}
+        last_review_ms: dict[int, int] = {}
+        review_count: dict[int, int] = {}
         for batch in _batches(list(card_to_note)):
             reviews = self.invoke("getReviewsOfCards", cards=[str(card_id) for card_id in batch]) or {}
             for card_key, entries in reviews.items():
@@ -101,10 +132,14 @@ class AnkiClient:
                 if note_id is None:
                     continue
                 for entry in entries or []:
+                    if int(entry.get("ease", 1)) == 0:
+                        continue
                     reviewed_at = int(entry["id"])
-                    previous = first_review_ms.get(note_id)
-                    if previous is None or reviewed_at < previous:
+                    review_count[note_id] = review_count.get(note_id, 0) + 1
+                    if reviewed_at < first_review_ms.get(note_id, reviewed_at + 1):
                         first_review_ms[note_id] = reviewed_at
+                    if reviewed_at > last_review_ms.get(note_id, -1):
+                        last_review_ms[note_id] = reviewed_at
 
         notes: list[RawNote] = []
         for note_id in note_ids:
@@ -117,6 +152,16 @@ class AnkiClient:
             }
             card_ids = tuple(int(card_id) for card_id in info.get("cards") or [])
             introduced = first_review_ms.get(note_id)
+            last_reviewed = last_review_ms.get(note_id)
+            modified = info.get("mod")
+            study = StudyStats(
+                modified_at=_from_anki_ms(int(modified) * 1000) if modified else None,
+                last_reviewed_at=_from_anki_ms(last_reviewed) if last_reviewed is not None else None,
+                review_count=review_count.get(note_id, 0),
+                lapses=lapses.get(note_id, 0),
+                interval_days=interval_days.get(note_id, 0),
+                suspended=bool(card_ids) and note_id not in unsuspended,
+            )
             notes.append(
                 RawNote(
                     note_id=note_id,
@@ -127,6 +172,7 @@ class AnkiClient:
                     card_ids=card_ids,
                     added_at=_from_anki_ms(note_id),
                     introduced_at=_from_anki_ms(introduced) if introduced is not None else None,
+                    study=study,
                 )
             )
         return notes

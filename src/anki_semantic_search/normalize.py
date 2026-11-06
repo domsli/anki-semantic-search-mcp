@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from html.parser import HTMLParser
 
-from anki_semantic_search.anki import RawNote
+from anki_semantic_search.anki import RawNote, StudyStats
 from anki_semantic_search.config import Config, FieldMap
 
 _SOUND = re.compile(r"\[sound:[^\]]*\]", re.IGNORECASE)
@@ -32,6 +32,7 @@ class NormalizedNote:
     passage: str
     added_at: datetime
     introduced_at: datetime | None
+    study: StudyStats = StudyStats()
 
 
 def normalize_for_config(note: RawNote, config: Config) -> NormalizedNote:
@@ -77,6 +78,7 @@ def normalize_note(note: RawNote, fields: FieldMap, *, explicit: bool = False) -
             passage=passage,
             added_at=note.added_at,
             introduced_at=note.introduced_at,
+            study=note.study,
         )
 
     word = _take(cleaned, fields.word, used)
@@ -109,6 +111,7 @@ def normalize_note(note: RawNote, fields: FieldMap, *, explicit: bool = False) -
         passage=passage,
         added_at=note.added_at,
         introduced_at=note.introduced_at,
+        study=note.study,
     )
 
 

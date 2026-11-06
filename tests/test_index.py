@@ -6,7 +6,7 @@ from pathlib import Path
 
 import lancedb
 
-from anki_semantic_search.anki import RawNote
+from anki_semantic_search.anki import RawNote, StudyStats
 from anki_semantic_search.config import Config, FieldMap
 from anki_semantic_search.index import TABLE_NAME, diff_index, sync_index
 
@@ -36,6 +36,7 @@ def _note(
     *,
     introduced: datetime | None = None,
     deck: str = "Japanese",
+    study: StudyStats = StudyStats(),
 ) -> RawNote:
     return RawNote(
         note_id=note_id,
@@ -46,6 +47,7 @@ def _note(
         card_ids=(note_id,),
         added_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
         introduced_at=introduced,
+        study=study,
     )
 
 
@@ -170,6 +172,52 @@ class SyncTests(unittest.TestCase):
             self.assertEqual([row["word"] for row in _rows(data_dir)], ["犬"])
             meta = json.loads((data_dir / "sync_meta.json").read_text(encoding="utf-8"))
             self.assertEqual(meta["configuration"]["decks"], ["Mining"])
+
+    def test_study_columns_are_stored_and_update_without_a_new_vector(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            sync_index(_config(data_dir), notes=[_note(1, "猫", "cat")], embedder=FakeEmbedder())
+            reviewed = StudyStats(
+                modified_at=datetime(2026, 9, 1, tzinfo=timezone.utc),
+                last_reviewed_at=datetime(2026, 11, 4, 8, 30, tzinfo=timezone.utc),
+                review_count=7,
+                lapses=2,
+                interval_days=15,
+                suspended=True,
+            )
+            embedder = FakeEmbedder()
+            stats = sync_index(_config(data_dir), notes=[_note(1, "猫", "cat", study=reviewed)], embedder=embedder)
+            self.assertEqual((stats.embedded, stats.updated), (0, 1))
+            self.assertEqual(embedder.calls, [])
+            row = _rows(data_dir)[0]
+            self.assertEqual(row["added_at"], "2024-01-01T00:00:00Z")
+            self.assertEqual(row["modified_at"], "2026-09-01T00:00:00Z")
+            self.assertEqual(row["last_reviewed_at"], "2026-11-04T08:30:00Z")
+            self.assertEqual((row["review_count"], row["lapses"], row["interval_days"]), (7, 2, 15))
+            self.assertTrue(row["suspended"])
+
+    def test_table_from_before_the_study_columns_is_upgraded_in_place(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            sync_index(_config(data_dir), notes=[_note(1, "猫", "cat"), _note(2, "犬", "dog")], embedder=FakeEmbedder())
+            old_columns = ["modified_at", "last_reviewed_at", "review_count", "lapses", "interval_days", "suspended"]
+            db = lancedb.connect(str(data_dir))
+            old_rows = db.open_table(TABLE_NAME).to_arrow().drop_columns(old_columns)
+            db.create_table(TABLE_NAME, data=old_rows, mode="overwrite")
+
+            embedder = FakeEmbedder()
+            study = StudyStats(review_count=4, last_reviewed_at=datetime(2026, 11, 1, tzinfo=timezone.utc))
+            stats = sync_index(
+                _config(data_dir),
+                notes=[_note(1, "猫", "cat", study=study), _note(2, "犬", "dog")],
+                embedder=embedder,
+            )
+            self.assertEqual(embedder.calls, [])
+            self.assertEqual((stats.updated, stats.unchanged), (1, 1))
+            rows = {row["note_id"]: row for row in _rows(data_dir)}
+            self.assertEqual(rows[1]["review_count"], 4)
+            self.assertEqual(rows[1]["last_reviewed_at"], "2026-11-01T00:00:00Z")
+            self.assertEqual((rows[2]["review_count"], rows[2]["last_reviewed_at"], rows[2]["suspended"]), (0, "", False))
 
     def test_rebuild_reembeds_every_note(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
