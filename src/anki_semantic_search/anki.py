@@ -126,7 +126,8 @@ class AnkiClient:
         last_review_ms: dict[int, int] = {}
         review_count: dict[int, int] = {}
         for batch in _batches(list(card_to_note)):
-            reviews = self.invoke("getReviewsOfCards", cards=[str(card_id) for card_id in batch]) or {}
+            # Integer ids: AnkiConnect answers string ids with empty histories.
+            reviews = self.invoke("getReviewsOfCards", cards=batch) or {}
             for card_key, entries in reviews.items():
                 note_id = card_to_note.get(int(card_key))
                 if note_id is None:

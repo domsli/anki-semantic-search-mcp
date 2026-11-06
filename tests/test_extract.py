@@ -146,7 +146,8 @@ class AnkiClientTests(unittest.TestCase):
                     {"cardId": 51, "deckName": "Japanese", "lapses": 2, "interval": -600, "queue": -1},
                 ]
             elif action == "getReviewsOfCards":
-                self.assertEqual(body["params"]["cards"], ["50", "51"])
+                # AnkiConnect returns empty histories for string ids, so ids must be integers.
+                self.assertEqual(body["params"]["cards"], [50, 51])
                 result = {
                     "50": [
                         {"id": 1_800_000_000_000, "ease": 3},
