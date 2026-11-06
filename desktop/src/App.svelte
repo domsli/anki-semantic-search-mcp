@@ -29,7 +29,7 @@
   let ankiState = $state("Reading your last update…");
   let ankiError = $state(false);
   let snapshot = $state("Not updated yet.");
-  let diff = $state("Open Anki to compare.");
+  let diff = $state("");
   let diffError = $state(false);
   let progress = $state("");
   let progressError = $state(false);
@@ -45,6 +45,11 @@
   let serverMessage = $state("");
   let serverError = $state(false);
   let serverUrl = $state("");
+  // Anki changes since the last Update decks, counted by the main process.
+  let pending = $state(null);
+  let pendingChecking = $state(false);
+  let lastPendingAt = 0;
+  const PENDING_EVERY_MS = 10000;
 
   let current = $derived(noteTypes.find((item) => item.name === noteTypeName) ?? null);
 
@@ -108,6 +113,7 @@
     if (!name || tracked.includes(name)) return;
     tracked = [...tracked, name];
     await reloadForDecks();
+    checkPending();
   }
 
   async function removeDeck(name) {
@@ -136,8 +142,20 @@
       const count = result.deleted === 1 ? "1 card" : `${result.deleted} cards`;
       progress = `Removed ${name}. ${count} deleted from the vector database.`;
       await reloadForDecks();
+      checkPending();
     } finally {
       removing = "";
+    }
+  }
+
+  async function checkPending(reload = false) {
+    if (!window.anki?.pending || pendingChecking) return;
+    pendingChecking = true;
+    try {
+      pending = await window.anki.pending([...tracked], reload);
+      lastPendingAt = Date.now();
+    } finally {
+      pendingChecking = false;
     }
   }
 
@@ -285,6 +303,8 @@
       markDirty();
       ankiState = "Checking the MCP server…";
       applyServer(await window.anki.server("status"));
+      ankiState = "Counting changes in Anki…";
+      await checkPending(true);
       ankiState = ankiOpen
         ? "Anki is open."
         : "Anki is closed.";
@@ -330,7 +350,7 @@
       if (dirty && !(await save({ announce: false }))) return;
       const result = await window.anki.api("diff");
       if (!result) {
-        diff = "Open Anki to compare.";
+        diff = "Anki needs to be open to compare.";
         diffError = false;
         return;
       }
@@ -368,7 +388,6 @@
       }
       progress = `Done. ${result.embedded} added, ${result.updated} refreshed, ${result.unchanged} already current, ${result.removed} removed.`;
       await refresh();
-      await compare();
     } finally {
       syncing = false;
     }
@@ -391,7 +410,18 @@
       applyServer(server);
     });
     refresh();
+    const busy = () => syncing || refreshing || Boolean(removing);
+    const timer = setInterval(() => {
+      if (!document.hidden && !busy()) checkPending();
+    }, PENDING_EVERY_MS);
+    // Switching back from Anki shows the new counts right away.
+    const onFocus = () => {
+      if (!busy() && Date.now() - lastPendingAt > 2000) checkPending();
+    };
+    window.addEventListener("focus", onFocus);
     return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
       stopProgress();
       stopServer();
     };
@@ -463,6 +493,8 @@
     {comparing}
     {saving}
     hasDecks={tracked.length > 0}
+    {pending}
+    {pendingChecking}
     {indexedConfiguration}
     {vectorUpdated}
     {configDifferences}

@@ -3,6 +3,7 @@ const { spawn } = require("child_process");
 const fs = require("fs");
 const net = require("net");
 const path = require("path");
+const { ankiInvoker, countPending } = require("./pending");
 
 const root = path.resolve(__dirname, "..");
 const configPath = path.join(root, "config.toml");
@@ -20,6 +21,8 @@ const pythonEnv = {
 
 let mainWindow = null;
 let serverChild = null;
+// AnkiConnect address and the sync_meta.json path, read once from config.toml through the CLI.
+let connection = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -119,6 +122,28 @@ ipcMain.handle("api", async (_event, { command, payload }) => {
   const result = await runCli([command], payload);
   const body = result.lines.at(-1) || { ok: false, error: result.error || result.raw || "The command returned no JSON." };
   return body;
+});
+
+// Count Anki changes since the last Update decks. Talks to AnkiConnect directly, so it is cheap to repeat.
+ipcMain.handle("pending", async (_event, { decks, reload }) => {
+  if (reload || !connection) {
+    const result = await runCli(["connection"]);
+    const body = result.lines.at(-1);
+    if (!body || !body.ok) return { ok: false, reason: "error", error: result.error || "Couldn't read the settings." };
+    connection = body;
+  }
+  let meta = null;
+  try {
+    meta = JSON.parse(fs.readFileSync(connection.meta_path, "utf8"));
+  } catch (_error) {
+    return { ok: false, reason: "no-baseline" };
+  }
+  try {
+    const counts = await countPending({ invoke: ankiInvoker(connection.anki_url, connection.anki_api_key), meta, decks: decks || [] });
+    return { ...counts, checkedAt: new Date().toISOString() };
+  } catch (error) {
+    return { ok: false, reason: "anki-closed", error: String(error && error.message ? error.message : error) };
+  }
 });
 
 ipcMain.handle("sync", async (event, { rebuild }) => {

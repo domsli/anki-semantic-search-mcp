@@ -10,6 +10,7 @@ from pathlib import Path
 from anki_semantic_search.anki import AnkiError
 from anki_semantic_search.config import Config, load_config
 from anki_semantic_search.control import (
+    connection,
     list_decks,
     list_note_types,
     preview_note,
@@ -50,6 +51,7 @@ def main(argv: list[str] | None = None) -> None:
 
     for name, func, help_text in (
         ("status", _status, "Show the last sync snapshot without contacting Anki."),
+        ("connection", _connection, "Print the AnkiConnect address and index paths for the desktop window."),
         ("decks", _decks, "List Anki decks and the decks tracked for search."),
         ("note-types", _note_types, "List Anki note types and their field roles."),
         ("diff", _diff, "Compare Anki with the index without embedding."),
@@ -131,6 +133,11 @@ def _serve(config: Config, args: argparse.Namespace) -> None:
 def _status(config: Config, args: argparse.Namespace) -> None:
     del args
     _emit(status(config))
+
+
+def _connection(config: Config, args: argparse.Namespace) -> None:
+    del args
+    _emit(connection(config))
 
 
 def _decks(config: Config, args: argparse.Namespace) -> None:

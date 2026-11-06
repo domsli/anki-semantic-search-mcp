@@ -186,7 +186,12 @@ def sync_index(
     synced earlier stay in the index. Only a changed embedding model drops
     them, because their vectors no longer fit. The previous table stays
     readable until the new rows are written.
+
+    sync_meta.json records when Anki was read and which notes each deck had,
+    so the window can count the changes made in Anki since.
     """
+    # Taken before reading Anki: a change made while the sync runs counts as not synced.
+    snapshot_at = datetime.now(timezone.utc)
     if notes is None:
         with AnkiClient(config.anki_url, config.anki_api_key) as client:
             notes = client.fetch_notes(config.decks)
@@ -261,8 +266,23 @@ def sync_index(
     )
     gone = set(stale_ids) | classified.desired_ids
     kept = {} if full_rewrite else {note_id: row for note_id, row in existing.items() if note_id not in gone}
-    _write_meta(config, embedder.model_name, stats, _indexed_decks(config, kept, keep_previous=not full_rewrite))
+    decks = _indexed_decks(config, kept, keep_previous=not full_rewrite)
+    seen = {} if full_rewrite else {
+        deck: ids for deck, ids in (_read_meta(config).get("seen_note_ids") or {}).items() if deck in decks
+    }
+    seen.update(_seen_note_ids(config.decks, notes))
+    _write_meta(config, embedder.model_name, stats, decks, snapshot_at=snapshot_at, seen=seen)
     return stats
+
+
+def _seen_note_ids(decks: Sequence[str], notes: Sequence[RawNote]) -> dict[str, list[int]]:
+    """Every note Anki listed for each deck, including notes with nothing to index."""
+    seen: dict[str, list[int]] = {deck: [] for deck in decks if deck}
+    for note in notes:
+        for deck in seen:
+            if any(name == deck or name.startswith(f"{deck}::") for name in note.deck_names):
+                seen[deck].append(note.note_id)
+    return {deck: sorted(set(ids)) for deck, ids in seen.items()}
 
 
 @dataclass
@@ -369,6 +389,8 @@ def remove_decks(config: Config, decks: Sequence[str], *, remaining: Sequence[st
         configuration = dict(meta.get("configuration") or {})
         configuration["decks"] = [name for name in configuration.get("decks") or [] if name not in removed_decks]
         meta["configuration"] = configuration
+        seen = meta.get("seen_note_ids") or {}
+        meta["seen_note_ids"] = {deck: ids for deck, ids in seen.items() if deck not in removed_decks}
         meta["note_count"] = max(int(meta.get("note_count") or 0) - deleted, 0)
         (config.data_dir / _META_NAME).write_text(json.dumps(meta), encoding="utf-8")
     return deleted
@@ -531,9 +553,20 @@ def _uses_e5_prefix(model_name: str) -> bool:
     return "e5" in model_name.lower()
 
 
-def _write_meta(config: Config, model_name: str, stats: SyncStats, decks: list[str]) -> None:
+def _write_meta(
+    config: Config,
+    model_name: str,
+    stats: SyncStats,
+    decks: list[str],
+    *,
+    snapshot_at: datetime,
+    seen: dict[str, list[int]],
+) -> None:
     payload = {
         "last_synced_at": _iso(datetime.now(timezone.utc)),
+        # When Anki was read, to the millisecond, and the notes each deck had then.
+        "anki_snapshot_at": snapshot_at.astimezone(timezone.utc).isoformat(timespec="milliseconds"),
+        "seen_note_ids": seen,
         "embedding_model": model_name,
         "note_count": stats.total,
         "embedded": stats.embedded,

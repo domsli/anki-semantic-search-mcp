@@ -35,6 +35,16 @@ def status(config: Config) -> dict:
     }
 
 
+def connection(config: Config) -> dict:
+    """Where Anki and the index are. Only the window's main process asks for this."""
+    return {
+        "ok": True,
+        "anki_url": config.anki_url,
+        "anki_api_key": config.anki_api_key,
+        "meta_path": str(config.data_dir / _META_NAME),
+    }
+
+
 def list_decks(config: Config) -> dict:
     tracked = tracked_decks(config)
     try:

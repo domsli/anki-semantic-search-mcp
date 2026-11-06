@@ -142,6 +142,8 @@ class TrackedDeckTests(unittest.TestCase):
             self.assertEqual(result["decks"], ["Mining"])
             self.assertEqual(result["note_count"], 1)
             self.assertEqual(result["indexed_configuration"]["decks"], ["Mining"])
+            meta = json.loads((folder / "data" / "sync_meta.json").read_text(encoding="utf-8"))
+            self.assertEqual(meta["seen_note_ids"], {"Mining": [3]})
             self.assertEqual(self._words(folder), {"鳥"})
             self.assertEqual(load_config(path).decks, ("Mining",))
 

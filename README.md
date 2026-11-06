@@ -87,7 +87,9 @@ One button starts and stops the server. It shows a spinner while the server star
 2. **Card indexing configuration.** Optional. There is a tab for each card type used in the listed decks. Pick one to see its fields. The marked fields are combined into the text stored in the vector database, and search measures the distance between your question and that text. Set each field to **Word**, **Reading**, **Definition**, **Include**, or **Ignore**. Ignored fields stay out of search.
 
    Settings belong to the card type, and apply in every deck that uses it. A *default* card type uses fields matched by usual names such as Front, Expression, or Meaning, and the window shows what they matched. Change any field and the card type becomes *custom*: only its marked fields are used, and a grey note shows the default next to each field you changed. **Reset to default** undoes that. **Save changes** stores the settings, and is greyed out when nothing is unsaved. Update decks also saves them.
-3. **Vector database.** **Update decks** applies the fields and reads every listed deck from Anki. Anki needs to be open. Only new and changed cards are embedded again. **See missed updates** lists what Update decks would pick up. **Re-index decks** embeds every card in every listed deck again, which takes longer.
+3. **Vector database.** At the top, the window counts the Anki changes that are not in search yet: new, edited, reviewed, and deleted cards, in total and per deck. It counts when it opens, every 10 seconds while it is visible, and when you switch back to it, so cards you add in Anki show up within seconds. It asks Anki directly and takes well under a second. The counts start after the first Update decks.
+
+   **Update decks** applies the fields and reads every listed deck from Anki. Anki needs to be open. Only new and changed cards are embedded again. **See missed updates** lists what Update decks would pick up. **Re-index decks** embeds every card in every listed deck again, which takes longer.
 
    This section also lists the field settings the decks were indexed with, and flags a deck or field change that is not in search yet.
 

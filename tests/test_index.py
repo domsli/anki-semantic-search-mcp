@@ -219,6 +219,22 @@ class SyncTests(unittest.TestCase):
             self.assertEqual(rows[1]["last_reviewed_at"], "2026-11-01T00:00:00Z")
             self.assertEqual((rows[2]["review_count"], rows[2]["last_reviewed_at"], rows[2]["suspended"]), (0, "", False))
 
+    def test_sync_records_the_anki_snapshot_for_counting_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            blank = _note(3, "", "")  # nothing to index, but Anki still lists it
+            before = datetime.now(timezone.utc)
+            sync_index(
+                _config(data_dir, ("Japanese", "Mining")),
+                notes=[_note(1, "猫", "cat"), _note(2, "犬", "dog", deck="Mining::Sub"), blank],
+                embedder=FakeEmbedder(),
+            )
+            meta = json.loads((data_dir / "sync_meta.json").read_text(encoding="utf-8"))
+            snapshot = datetime.fromisoformat(meta["anki_snapshot_at"])
+            self.assertLessEqual(abs((snapshot - before).total_seconds()), 1)
+            self.assertEqual(meta["seen_note_ids"], {"Japanese": [1, 3], "Mining": [2]})
+            self.assertEqual(len(_rows(data_dir)), 2)
+
     def test_rebuild_reembeds_every_note(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = Path(tmp)

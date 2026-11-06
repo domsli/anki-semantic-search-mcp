@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("anki", {
   api: (command, payload) => ipcRenderer.invoke("api", { command, payload }),
   sync: (rebuild) => ipcRenderer.invoke("sync", { rebuild: Boolean(rebuild) }),
+  pending: (decks, reload) => ipcRenderer.invoke("pending", { decks, reload: Boolean(reload) }),
   onSyncProgress: (callback) => {
     const listener = (_event, data) => callback(data);
     ipcRenderer.on("sync-progress", listener);
