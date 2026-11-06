@@ -43,8 +43,8 @@
 <section>
   <h2>2. Fields</h2>
   <p class="hint">
-    Every card type starts with the default fields, matched by common names such as Front, Expression, or Meaning.
-    Change any box and that card type becomes custom.
+    The marked fields are combined into the text stored in the vector database. Search measures the distance
+    between your question and that text. Ignored fields are left out.
   </p>
   {#if loadingTypes}
     <p class="status" role="status"><Spinner /><span>Loading card types…</span></p>
@@ -58,14 +58,11 @@
       </select>
     </label>
     {#if current}
-      <div class="mode row">
-        {#if current.mapped}
-          <p class="snapshot">Custom. Only the boxes marked below are used.</p>
+      {#if current.mapped}
+        <div class="mode row">
           <button type="button" onclick={resetToDefault} disabled={!ankiOpen}>Reset to default</button>
-        {:else}
-          <p class="snapshot">Default. These are the boxes the default names match.</p>
-        {/if}
-      </div>
+        </div>
+      {/if}
       <div>
         {#each current.fields as field (field)}
           {@const fallback = current.default_roles?.[field] || "unassigned"}

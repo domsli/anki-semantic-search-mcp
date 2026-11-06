@@ -90,10 +90,6 @@ section {
   margin: 8px 0;
 }
 
-.mode .snapshot {
-  margin: 0;
-}
-
 .default-note {
   font-size: 0.9em;
   color: color-mix(in srgb, currentColor 65%, transparent);
