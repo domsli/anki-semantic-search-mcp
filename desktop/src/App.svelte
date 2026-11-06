@@ -429,7 +429,13 @@
 </script>
 
 <header>
-  <div>
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="8" />
+      <circle cx="14" cy="14" r="6.5" />
+      <path d="M19 19l6 6" />
+    </svg>
+    <div>
     <h1>Anki Semantic Search MCP</h1>
     <p class="lede">Run the MCP server, and update your Anki decks in the vector database.</p>
     {#if refreshing && !ready}
@@ -440,8 +446,12 @@
         <span>{ankiState}</span>
       </p>
     {/if}
+    </div>
   </div>
-  <button type="button" onclick={refresh} disabled={refreshing}>Refresh</button>
+  <button type="button" class="ghost" onclick={refresh} disabled={refreshing}>
+    <svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M16 10a6 6 0 1 1-1.8-4.3M16 3.5v3.2h-3.2" /></svg>
+    Refresh
+  </button>
 </header>
 {#if ready}
 <main>

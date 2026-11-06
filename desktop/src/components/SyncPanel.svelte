@@ -48,13 +48,23 @@
 </script>
 
 <section>
-  <h2>3. Vector database</h2>
+  <h2><span class="step">3</span>Vector database</h2>
   <div class="pending" role="status">
     {#if pending?.ok}
-      {#if pendingTotal === 0}
-        <p class="snapshot in-sync">In sync with Anki.</p>
-      {:else}
-        <p class="snapshot"><strong>Not synced:</strong> {describe(pending.total)}</p>
+      <div class="sync-state" class:clean={pendingTotal === 0}>
+        <span class="dot" aria-hidden="true"></span>
+        <strong>{pendingTotal === 0 ? "In sync with Anki" : "Not synced yet"}</strong>
+        <span class="checked">Checked {clock(pending.checkedAt)}{#if pendingChecking}<Spinner />{/if}</span>
+      </div>
+      {#if pendingTotal > 0}
+        <div class="stats">
+          {#each KINDS as kind (kind)}
+            <div class="stat" class:zero={!pending.total[kind]}>
+              <span class="stat-value">{pending.total[kind]}</span>
+              <span class="stat-label">{kind}</span>
+            </div>
+          {/each}
+        </div>
         {#if pendingDecks.length > 1}
           <ul class="config-list">
             {#each pendingDecks as [name, counts] (name)}
@@ -63,7 +73,6 @@
           </ul>
         {/if}
       {/if}
-      <p class="checked">Checked {clock(pending.checkedAt)}{#if pendingChecking}<Spinner />{/if}</p>
     {:else if pendingNote}
       <p class="snapshot">{pendingNote}</p>
     {:else if pendingChecking}
@@ -122,7 +131,7 @@
     The vector database does not follow Anki on its own. Cards you add, edit, delete, or review appear in search
     only after Update decks.
   </p>
-  <div class="row">
+  <div class="row actions">
     <button type="button" class="primary" onclick={onSync} disabled={!hasDecks || syncing || comparing || saving}>Update decks</button>
     <button type="button" onclick={onCompare} disabled={!hasDecks || syncing || comparing || saving}>See missed updates</button>
     <button type="button" onclick={onRebuild} disabled={!hasDecks || syncing || comparing || saving}>Re-index decks</button>

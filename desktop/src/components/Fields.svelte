@@ -45,7 +45,7 @@
 </script>
 
 <section>
-  <h2>2. Card indexing configuration</h2>
+  <h2><span class="step">2</span>Card indexing configuration</h2>
   <p class="hint">
     The marked fields are combined into the text stored in the vector database. Search measures the distance
     between your question and that text. Ignored fields are left out.
@@ -87,7 +87,7 @@
           {#each current.fields as field (field)}
             {@const fallback = current.default_roles?.[field] || "unassigned"}
             <label class="field">
-              {field}
+              <span class="field-name">{field}</span>
               <select
                 value={current.roles[field] || "unassigned"}
                 onchange={(event) => {
@@ -120,7 +120,7 @@
   {/if}
   <button
     type="button"
-    class="save"
+    class="save primary"
     onclick={() => onSave()}
     disabled={!dirty || saving || syncing || comparing}
   >

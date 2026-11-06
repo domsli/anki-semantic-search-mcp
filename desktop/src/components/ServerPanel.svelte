@@ -13,7 +13,7 @@
 </script>
 
 <section>
-  <h2>MCP server</h2>
+  <h2><span class="step server" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M4 5h12v4H4zM4 11h12v4H4z" /><circle cx="7" cy="7" r=".8" /><circle cx="7" cy="13" r=".8" /></svg></span>MCP server</h2>
   <div class="row">
     <button
       type="button"
@@ -30,7 +30,7 @@
       {/if}
       <span>{label}</span>
     </button>
-    <code>{url}</code>
+    {#if url}<code class="url">{url}</code>{/if}
   </div>
   {#if message}
     <p class="server-message" class:error role="status">{message}</p>

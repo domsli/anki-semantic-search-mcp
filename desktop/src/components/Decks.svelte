@@ -13,6 +13,8 @@
     return indexed.includes(name) ? "In search" : "Not in search yet";
   }
 
+  const TONES = { "In search": "ok", "Not in search yet": "muted", "Not in Anki": "warn" };
+
   function add() {
     if (!choice) return;
     onAdd(choice);
@@ -21,7 +23,7 @@
 </script>
 
 <section>
-  <h2>1. Decks</h2>
+  <h2><span class="step">1</span>Decks</h2>
   <p class="hint">Each deck includes the decks inside it. Update decks reads every deck listed here.</p>
   {#if tracked.length === 0}
     <p class="snapshot">No decks yet.</p>
@@ -30,8 +32,8 @@
       {#each tracked as name (name)}
         <li>
           <span class="deck-name">{name}</span>
-          <span class="deck-status" class:pending={status(name) !== "In search"}>{status(name)}</span>
-          <button type="button" onclick={() => onRemove(name)} disabled={busy}>
+          <span class="pill {TONES[status(name)]}">{status(name)}</span>
+          <button type="button" class="ghost danger small" onclick={() => onRemove(name)} disabled={busy}>
             {#if removing === name}<Spinner />{/if}
             Remove
           </button>
@@ -40,7 +42,7 @@
     </ul>
   {/if}
   {#if !ankiOpen}
-    <p>Open Anki and refresh to add a deck.</p>
+    <p class="snapshot">Open Anki and refresh to add a deck.</p>
   {:else if addable.length}
     <div class="deck-pick">
       <select bind:value={choice} aria-label="Deck to add">

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, nativeTheme } = require("electron");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const net = require("net");
@@ -28,7 +28,11 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     title: "Anki Semantic Search MCP",
     width: 980,
-    height: 820,
+    height: 860,
+    minWidth: 560,
+    autoHideMenuBar: true,
+    // Matches the page background, so the window does not flash white while it loads.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#111318" : "#f4f5f8",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
