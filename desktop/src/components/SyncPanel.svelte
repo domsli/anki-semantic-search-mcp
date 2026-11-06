@@ -72,9 +72,13 @@
       <span>{progress}</span>
     </p>
   {/if}
+  <p class="hint">
+    The vector database does not follow Anki on its own. Cards you add, edit, delete, or review appear in search
+    only after Update deck.
+  </p>
   <div class="row">
-    <button type="button" class="primary" onclick={onSync} disabled={!deck || syncing || comparing || saving}>Update search</button>
-    <button type="button" onclick={onCompare} disabled={!deck || syncing || comparing || saving}>See what changed</button>
-    <button type="button" onclick={onRebuild} disabled={!deck || syncing || comparing || saving}>Measure every card again</button>
+    <button type="button" class="primary" onclick={onSync} disabled={!deck || syncing || comparing || saving}>Update deck</button>
+    <button type="button" onclick={onCompare} disabled={!deck || syncing || comparing || saving}>See missed updates</button>
+    <button type="button" onclick={onRebuild} disabled={!deck || syncing || comparing || saving}>Re-index deck</button>
   </div>
 </section>

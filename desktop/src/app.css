@@ -49,8 +49,42 @@ section {
 .snapshot,
 .diff,
 .progress,
-.server-state {
+.server-message {
   margin: 0 0 10px;
+}
+
+.server-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.server-toggle.running {
+  border-color: #12b76a;
+}
+
+.running-icon {
+  width: 0.7em;
+  height: 0.7em;
+  flex: none;
+  fill: #12b76a;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.server-message {
+  margin-top: 8px;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .running-icon {
+    animation: none;
+  }
 }
 
 .config-list {

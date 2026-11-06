@@ -4,7 +4,7 @@ export const ROLE_LABELS = {
   word: "Word",
   reading: "Reading",
   definition: "Definition",
-  extra: "Also include",
+  extra: "Include",
   skip: "Ignore",
   unassigned: "Leave out",
 };

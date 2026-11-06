@@ -40,7 +40,9 @@
   let typesReady = $state(false);
   let preview = $state("Open Anki.");
   let previewError = $state(false);
-  let serverState = $state("Off");
+  let serverRunning = $state(false);
+  let serverOwned = $state(false);
+  let serverMessage = $state("");
   let serverError = $state(false);
   let serverUrl = $state("");
 
@@ -129,9 +131,21 @@
 
   function applyServer(server) {
     serverUrl = server.url || `http://127.0.0.1:${serverPort || 8000}/mcp`;
+    serverRunning = Boolean(server.running);
+    serverOwned = Boolean(server.owned);
     serverError = Boolean(server.error);
-    if (server.error) serverState = server.error;
-    else serverState = server.running ? "On" : "Off";
+    serverMessage = server.error || "";
+  }
+
+  async function toggleServer() {
+    const action = serverRunning ? "stop" : "start";
+    serverBusy = true;
+    serverBusyLabel = action === "start" ? "Starting…" : "Stopping…";
+    try {
+      applyServer(await window.anki.server(action));
+    } finally {
+      serverBusy = false;
+    }
   }
 
   async function refreshPreview(item = current) {
@@ -308,13 +322,13 @@
   }
 
   async function runSync(rebuild) {
-    if (rebuild && !window.confirm("Remeasure every card in this deck? This can take a while.")) return;
+    if (rebuild && !window.confirm("Re-index every card in this deck? This can take a while.")) return;
     syncing = true;
     progressError = false;
       progress = "Saving…";
     try {
       if (!(await save({ announce: false }))) return;
-      progress = rebuild ? "Measuring every card…" : "Updating…";
+      progress = rebuild ? "Re-indexing the deck…" : "Updating the deck…";
       const result = await window.anki.sync(rebuild);
       if (!result.ok) {
         progress = result.error || "Update failed.";
@@ -355,8 +369,8 @@
 
 <header>
   <div>
-    <h1>Search your cards</h1>
-    <p class="lede">Update the configuration and the vector database.</p>
+    <h1>Anki Semantic Search MCP</h1>
+    <p class="lede">Run the MCP server, and update your Anki decks in the vector database.</p>
     {#if refreshing && !ready}
       <p class="loading" role="status"><Spinner large /><span>{ankiState}</span></p>
     {:else}
@@ -370,6 +384,16 @@
 </header>
 {#if ready}
 <main>
+  <ServerPanel
+    running={serverRunning}
+    owned={serverOwned}
+    url={serverUrl}
+    message={serverMessage}
+    error={serverError}
+    busy={serverBusy}
+    busyLabel={serverBusyLabel}
+    onToggle={toggleServer}
+  />
   <Decks {decks} {deck} {dirty} onChoose={chooseDeck} />
   <Fields
     {noteTypes}
@@ -405,31 +429,6 @@
     onCompare={compare}
     onSync={() => runSync(false)}
     onRebuild={() => runSync(true)}
-  />
-  <ServerPanel
-    state={serverState}
-    url={serverUrl}
-    error={serverError}
-    busy={serverBusy}
-    busyLabel={serverBusyLabel}
-    onStart={async () => {
-      serverBusy = true;
-      serverBusyLabel = "Starting…";
-      try {
-        applyServer(await window.anki.server("start"));
-      } finally {
-        serverBusy = false;
-      }
-    }}
-    onStop={async () => {
-      serverBusy = true;
-      serverBusyLabel = "Stopping…";
-      try {
-        applyServer(await window.anki.server("stop"));
-      } finally {
-        serverBusy = false;
-      }
-    }}
   />
 </main>
 {/if}

@@ -12,12 +12,13 @@ To install the app and work on it, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Install the [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on and open Anki, then open the desktop window.
 
-The window does four things, in order:
+**MCP server** is at the top. One button starts and stops it, and shows whether it is running. The address is `http://127.0.0.1:8000/mcp`. ChatGPT can keep searching after you close Anki, as long as the server stays on.
 
-1. **Choose a deck.** Search updates one deck at a time. A deck includes the decks inside it. Updating adds the deck to search, and decks you updated before stay searchable. The choice waits until you update search.
-2. **Check the fields.** Optional. For each card type, the window shows which box is used as the word, the definition, and so on. Every card type starts with the default fields, matched by usual names such as Front, Expression, or Meaning. Change any box and that card type becomes custom. Only its marked boxes are used. Reset to default undoes that.
-3. **Update search.** This is the button that applies the checks and reads Anki. Anki needs to be open. See what changed previews that update. Update everything rereads every card. Save without updating remembers the checks for later.
-4. **Start MCP server.** Start it after the vector database is updated. The address is `http://127.0.0.1:8000/mcp`. ChatGPT can keep searching after you close Anki, as long as the server stays on.
+Below it, three steps put a deck in the vector database:
+
+1. **Choose a deck.** Search updates one deck at a time. A deck includes the decks inside it. Updating adds the deck to search, and decks you updated before stay searchable. The choice waits until you update the deck.
+2. **Check the fields.** Optional. For each card type, the window shows which box is used as the word, the definition, and so on. Every card type starts with the default fields, matched by usual names such as Front, Expression, or Meaning. Change any box and that card type becomes custom. Only its marked boxes are used. Reset to default undoes that. Save configuration remembers the fields without updating search.
+3. **Update deck.** This is the button that applies the fields and reads Anki. Anki needs to be open. The vector database does not follow Anki on its own: cards you add, edit, delete, or review appear in search only after Update deck. See missed updates lists the changes it would pick up. Re-index deck embeds every card in the deck again.
 
 ## Connect ChatGPT
 

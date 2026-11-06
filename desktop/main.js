@@ -23,7 +23,7 @@ let serverChild = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    title: "Search your cards",
+    title: "Anki Semantic Search MCP",
     width: 980,
     height: 820,
     webPreferences: {
@@ -168,15 +168,17 @@ ipcMain.handle("server", async (_event, { action }) => {
       return { ...(await serverStatus(port)), error: "Already running." };
     }
     if (pythonMissing()) return { running: false, owned: false, error: `Python was not found at ${python}` };
-    serverChild = spawnPython(["serve"]);
+    const child = spawnPython(["serve"]);
+    serverChild = child;
     let stderr = "";
-    serverChild.stderr.on("data", (chunk) => {
+    child.stderr.on("data", (chunk) => {
       stderr += chunk;
     });
-    serverChild.on("exit", () => {
-      serverChild = null;
+    child.on("exit", () => {
+      if (serverChild === child) serverChild = null;
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("server-exit", { error: stderr.trim() });
+        // A stop from this window is not an error, even though the server logged to stderr.
+        mainWindow.webContents.send("server-exit", { error: child.stoppedHere ? "" : stderr.trim() });
       }
     });
     for (let attempt = 0; attempt < 20 && serverChild && !(await portOpen(port)); attempt += 1) {
@@ -192,6 +194,7 @@ ipcMain.handle("server", async (_event, { action }) => {
       if (current.running) current.error = "Running outside this window.";
       return current;
     }
+    serverChild.stoppedHere = true;
     serverChild.kill();
     serverChild = null;
     await new Promise((resolve) => setTimeout(resolve, 300));
