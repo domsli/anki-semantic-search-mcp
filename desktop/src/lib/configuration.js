@@ -35,9 +35,12 @@ export function configurationEntries(config) {
 export function configurationDifferences(previous, next) {
   if (!previous || !next) return [];
   const notes = [];
-  const oldDeck = (previous.decks || []).filter(Boolean).join(", ");
-  const newDeck = (next.decks || []).filter(Boolean).join(", ");
-  if (oldDeck !== newDeck) notes.push(newDeck ? `Deck: ${newDeck}` : "No deck.");
+  // Earlier decks stay in search, so only a chosen deck that is missing counts.
+  const oldDecks = (previous.decks || []).filter(Boolean);
+  const newDecks = (next.decks || []).filter(Boolean);
+  const missing = newDecks.filter((name) => !oldDecks.includes(name));
+  if (missing.length) notes.push(`Deck not in search yet: ${missing.join(", ")}`);
+  else if (!newDecks.length && oldDecks.length) notes.push("No deck.");
 
   const oldTypes = previous.note_types || {};
   const newTypes = next.note_types || {};
@@ -46,11 +49,11 @@ export function configurationDifferences(previous, next) {
     const had = Object.hasOwn(oldTypes, name);
     const has = Object.hasOwn(newTypes, name);
     if (had && !has) {
-      notes.push(`${name}: not set up`);
+      notes.push(`${name}: back to default fields`);
       continue;
     }
     if (!had && has) {
-      notes.push(`${name}: set up`);
+      notes.push(`${name}: custom fields`);
       continue;
     }
     const before = fieldRoles(oldTypes[name]);

@@ -28,13 +28,14 @@
   <h3>Stored configuration</h3>
   {#if indexed}
     <ul class="config-list">
-      <li>Deck: {indexed.decks.join(", ") || "None"}</li>
+      <li>Decks in search: {indexed.decks.join(", ") || "None"}</li>
       {#if indexed.types.length === 0}
-        <li>No card type set up.</li>
+        <li>Every card type uses the default fields.</li>
       {:else}
+        <li>Other card types use the default fields.</li>
         {#each indexed.types as type (type.name)}
           <li>
-            {type.name}
+            {type.name} (custom)
             {#if type.fields.length === 0}
               <ul><li>None.</li></ul>
             {:else}

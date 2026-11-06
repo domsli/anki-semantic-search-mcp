@@ -148,7 +148,14 @@ def diff_index(config: Config, notes: Sequence[RawNote] | None = None) -> dict:
             notes = client.fetch_notes(config.decks)
     prepared = _prepare(config, notes)
     existing = _read_existing(_connect(config.data_dir)) if config.data_dir.is_dir() else {}
-    classified = _classify(prepared, existing, config.embedding_model, _model_changed(existing, config.embedding_model))
+    model_changed = _model_changed(existing, config.embedding_model)
+    classified = _classify(
+        prepared,
+        existing,
+        config.embedding_model,
+        model_changed,
+        scope=None if model_changed else config.decks,
+    )
     return {
         "ok": True,
         "would_embed": len(classified.embed),
@@ -172,10 +179,12 @@ def sync_index(
     on_progress: Callable[[int, int], None] | None = None,
     on_status: Callable[[str], None] | None = None,
 ) -> SyncStats:
-    """Refresh the on-disk index from Anki notes.
+    """Refresh the chosen decks in the on-disk index from Anki notes.
 
     Notes whose passage and embedding model are unchanged keep their vectors.
-    Deck, tags, and introduced_at are still updated. The previous table stays
+    Deck, tags, and introduced_at are still updated. Notes from decks that were
+    synced earlier stay in the index. Only a changed embedding model drops
+    them, because their vectors no longer fit. The previous table stays
     readable until the new rows are written.
     """
     if notes is None:
@@ -187,8 +196,16 @@ def sync_index(
     config.data_dir.mkdir(parents=True, exist_ok=True)
     db = lancedb.connect(str(config.data_dir))
     existing = _read_existing(db)
-    full_rewrite = rebuild or _model_changed(existing, embedder.model_name)
-    classified = _classify(prepared, existing, embedder.model_name, full_rewrite)
+    # A new model makes every stored vector incompatible, so the table starts over.
+    # A rebuild only re-embeds the chosen decks and keeps the others.
+    full_rewrite = _model_changed(existing, embedder.model_name)
+    classified = _classify(
+        prepared,
+        existing,
+        embedder.model_name,
+        full_rewrite or rebuild,
+        scope=None if full_rewrite else config.decks,
+    )
 
     total_embed = len(classified.embed)
     if on_progress:
@@ -241,7 +258,9 @@ def sync_index(
         unchanged=unchanged,
         removed=len(stale_ids),
     )
-    _write_meta(config, embedder.model_name, stats)
+    gone = set(stale_ids) | classified.desired_ids
+    kept = {} if full_rewrite else {note_id: row for note_id, row in existing.items() if note_id not in gone}
+    _write_meta(config, embedder.model_name, stats, _indexed_decks(config, kept, keep_previous=not full_rewrite))
     return stats
 
 
@@ -253,6 +272,7 @@ class _Classified:
     unchanged: int
     remove_ids: list[int]
     remove_words: list[str]
+    desired_ids: set[int]
 
 
 def _prepare(config: Config, notes: Sequence[RawNote]) -> list[NormalizedNote]:
@@ -274,7 +294,13 @@ def _classify(
     existing: dict[int, dict],
     model_name: str,
     full_rewrite: bool,
+    *,
+    scope: Sequence[str] | None,
 ) -> _Classified:
+    """Sort notes into embed, update, unchanged, and remove.
+
+    Only stored notes inside `scope` can be removed. None means every stored note.
+    """
     embed: list[tuple[NormalizedNote, str]] = []
     update: list[NormalizedNote] = []
     update_vectors: list[list[float]] = []
@@ -297,9 +323,39 @@ def _classify(
                 update_vectors.append(_as_floats(previous["vector"]))
             continue
         embed.append((note, digest))
-    remove_ids = [note_id for note_id in existing if note_id not in desired_ids]
+    remove_ids = [
+        note_id
+        for note_id, row in existing.items()
+        if note_id not in desired_ids and (scope is None or _in_scope(row, scope))
+    ]
     remove_words = [str(existing[note_id].get("word") or "") for note_id in remove_ids[:5]]
-    return _Classified(embed, update, update_vectors, unchanged, remove_ids, remove_words)
+    return _Classified(embed, update, update_vectors, unchanged, remove_ids, remove_words, desired_ids)
+
+
+def _in_scope(row: dict, decks: Sequence[str]) -> bool:
+    """True when a stored note was in one of `decks` or a deck inside one."""
+    stored = json.loads(row.get("deck_names") or "[]")
+    return any(name == deck or name.startswith(f"{deck}::") for name in stored for deck in decks if deck)
+
+
+def _indexed_decks(config: Config, kept: dict[int, dict], *, keep_previous: bool) -> list[str]:
+    """The chosen decks, plus earlier decks that still have notes in the index."""
+    decks = list(config.decks)
+    if not keep_previous:
+        return decks
+    meta_path = config.data_dir / _META_NAME
+    previous: list[str] = []
+    if meta_path.is_file():
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            previous = list((meta.get("configuration") or {}).get("decks") or [])
+        except (ValueError, OSError):
+            previous = []
+    rows = list(kept.values())
+    for deck in previous:
+        if deck not in decks and any(_in_scope(row, (deck,)) for row in rows):
+            decks.append(deck)
+    return decks
 
 
 def _example(note: NormalizedNote) -> str:
@@ -393,7 +449,7 @@ def _uses_e5_prefix(model_name: str) -> bool:
     return "e5" in model_name.lower()
 
 
-def _write_meta(config: Config, model_name: str, stats: SyncStats) -> None:
+def _write_meta(config: Config, model_name: str, stats: SyncStats, decks: list[str]) -> None:
     payload = {
         "last_synced_at": _iso(datetime.now(timezone.utc)),
         "embedding_model": model_name,
@@ -403,7 +459,7 @@ def _write_meta(config: Config, model_name: str, stats: SyncStats) -> None:
         "unchanged": stats.unchanged,
         "removed": stats.removed,
         "configuration": {
-            "decks": list(config.decks),
+            "decks": decks,
             "note_types": {name: mapping.as_dict() for name, mapping in config.note_types.items()},
         },
     }

@@ -85,6 +85,20 @@ section {
   margin: 6px 0;
 }
 
+.mode {
+  align-items: center;
+  margin: 8px 0;
+}
+
+.mode .snapshot {
+  margin: 0;
+}
+
+.default-note {
+  font-size: 0.9em;
+  color: color-mix(in srgb, currentColor 65%, transparent);
+}
+
 .field select {
   min-width: 18rem;
 }

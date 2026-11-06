@@ -71,12 +71,14 @@ def list_note_types(config: Config, decks: list[str] | None = None) -> dict:
     for item in live:
         name = item["name"]
         mapped = config.note_types.get(name)
+        default_roles = _roles_for(item["fields"], config.fields, leftovers=True)
         types.append(
             {
                 "name": name,
                 "fields": item["fields"],
                 "mapped": mapped is not None,
-                "roles": _roles_for(item["fields"], mapped if mapped is not None else config.fields, leftovers=mapped is None),
+                "roles": default_roles if mapped is None else _roles_for(item["fields"], mapped, leftovers=False),
+                "default_roles": default_roles,
             }
         )
     return {"ok": True, "anki_open": True, "note_types": types}
@@ -95,7 +97,10 @@ def preview_note(config: Config, payload: dict) -> dict:
     if note is None:
         return {"ok": True, "passage": "", "message": "None of these cards are in the decks you chose."}
     roles = payload.get("roles")
-    if roles is None:
+    if roles is None and payload.get("explicit") is False:
+        # The default field names, even when this card type has custom settings saved.
+        normalized = normalize_note(note, config.fields)
+    elif roles is None:
         normalized = normalize_for_config(note, config)
     else:
         normalized = normalize_note(note, _map_from_roles(roles), explicit=bool(payload.get("explicit", True)))

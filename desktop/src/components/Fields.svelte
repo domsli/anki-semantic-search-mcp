@@ -31,11 +31,21 @@
     skip: "Ignore",
     unassigned: "Leave out",
   };
+
+  function resetToDefault() {
+    if (!current) return;
+    current.roles = { ...(current.default_roles || {}) };
+    current.mapped = false;
+    onEdit();
+  }
 </script>
 
 <section>
   <h2>2. Fields</h2>
-  <p class="hint">These boxes are what distance uses. Unset card types use Front, Expression, or Meaning.</p>
+  <p class="hint">
+    Every card type starts with the default fields, matched by common names such as Front, Expression, or Meaning.
+    Change any box and that card type becomes custom.
+  </p>
   {#if loadingTypes}
     <p class="status" role="status"><Spinner /><span>Loading card types…</span></p>
   {:else}
@@ -43,33 +53,30 @@
       Card type
       <select bind:value={noteTypeName} onchange={() => onChange()}>
         {#each noteTypes as item (item.name)}
-          <option value={item.name}>{item.mapped ? `${item.name} (set up)` : item.name}</option>
+          <option value={item.name}>{item.mapped ? `${item.name} (custom)` : `${item.name} (default)`}</option>
         {/each}
       </select>
     </label>
-    <label class="check">
-      <input
-        type="checkbox"
-        checked={Boolean(current?.mapped)}
-        disabled={!current || !ankiOpen}
-        onchange={(event) => {
-          if (!current) return;
-          current.mapped = event.currentTarget.checked;
-          onEdit();
-        }}
-      />
-      Set up this card type
-    </label>
-    <div>
-      {#if current}
+    {#if current}
+      <div class="mode row">
+        {#if current.mapped}
+          <p class="snapshot">Custom. Only the boxes marked below are used.</p>
+          <button type="button" onclick={resetToDefault} disabled={!ankiOpen}>Reset to default</button>
+        {:else}
+          <p class="snapshot">Default. These are the boxes the default names match.</p>
+        {/if}
+      </div>
+      <div>
         {#each current.fields as field (field)}
+          {@const fallback = current.default_roles?.[field] || "unassigned"}
           <label class="field">
             {field}
             <select
               value={current.roles[field] || "unassigned"}
-              disabled={!current.mapped || !ankiOpen}
+              disabled={!ankiOpen}
               onchange={(event) => {
                 current.roles[field] = event.currentTarget.value;
+                current.mapped = true;
                 onEdit();
               }}
             >
@@ -77,10 +84,13 @@
                 <option value={role}>{roleLabels[role]}</option>
               {/each}
             </select>
+            {#if current.mapped && (current.roles[field] || "unassigned") !== fallback}
+              <span class="default-note">Default: {roleLabels[fallback]}</span>
+            {/if}
           </label>
         {/each}
-      {/if}
-    </div>
+      </div>
+    {/if}
     <h3>Example</h3>
     {#if previewing}
       <p class="status" role="status"><Spinner /><span>Loading an example…</span></p>

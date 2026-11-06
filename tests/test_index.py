@@ -29,24 +29,31 @@ class FakeEmbedder:
         return [[float(len(text)), 1.0] for text in texts]
 
 
-def _note(note_id: int, word: str, definition: str, *, introduced: datetime | None = None) -> RawNote:
+def _note(
+    note_id: int,
+    word: str,
+    definition: str,
+    *,
+    introduced: datetime | None = None,
+    deck: str = "Japanese",
+) -> RawNote:
     return RawNote(
         note_id=note_id,
         model_name="Basic",
         tags=("vocab",),
         fields={"Front": word, "Back": definition},
-        deck_names=("Japanese",),
+        deck_names=(deck,),
         card_ids=(note_id,),
         added_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
         introduced_at=introduced,
     )
 
 
-def _config(data_dir: Path) -> Config:
+def _config(data_dir: Path, decks: tuple[str, ...] = ("Japanese",)) -> Config:
     return Config(
         anki_url="http://127.0.0.1:8765",
         anki_api_key=None,
-        decks=("Japanese",),
+        decks=decks,
         embedding_model="fake",
         host="127.0.0.1",
         port=8000,
@@ -117,6 +124,52 @@ class SyncTests(unittest.TestCase):
             stats = sync_index(_config(data_dir), notes=[_note(1, "猫", "cat")], embedder=FakeEmbedder())
             self.assertEqual(stats.removed, 1)
             self.assertEqual([row["word"] for row in _rows(data_dir)], ["猫"])
+
+    def test_syncing_another_deck_keeps_the_earlier_deck(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            sync_index(_config(data_dir), notes=[_note(1, "猫", "cat")], embedder=FakeEmbedder())
+            stats = sync_index(
+                _config(data_dir, ("Mining",)),
+                notes=[_note(2, "犬", "dog", deck="Mining::Sub")],
+                embedder=FakeEmbedder(),
+            )
+            self.assertEqual((stats.embedded, stats.removed, stats.total), (1, 0, 2))
+            self.assertEqual({row["word"] for row in _rows(data_dir)}, {"猫", "犬"})
+            meta = json.loads((data_dir / "sync_meta.json").read_text(encoding="utf-8"))
+            self.assertEqual(meta["configuration"]["decks"], ["Mining", "Japanese"])
+
+    def test_diff_does_not_count_other_decks_as_removed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            sync_index(_config(data_dir), notes=[_note(1, "猫", "cat")], embedder=FakeEmbedder())
+            result = diff_index(_config(data_dir, ("Mining",)), notes=[_note(2, "犬", "dog", deck="Mining")])
+            self.assertEqual((result["would_embed"], result["would_remove"]), (1, 0))
+
+    def test_rebuild_keeps_other_decks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            sync_index(_config(data_dir), notes=[_note(1, "猫", "cat")], embedder=FakeEmbedder())
+            mining = [_note(2, "犬", "dog", deck="Mining")]
+            sync_index(_config(data_dir, ("Mining",)), notes=mining, embedder=FakeEmbedder())
+            embedder = FakeEmbedder()
+            stats = sync_index(_config(data_dir, ("Mining",)), notes=mining, embedder=embedder, rebuild=True)
+            self.assertEqual((stats.embedded, stats.total), (1, 2))
+            self.assertEqual(len(embedder.calls), 1)
+
+    def test_model_change_drops_other_decks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            sync_index(_config(data_dir), notes=[_note(1, "猫", "cat")], embedder=FakeEmbedder("fake"))
+            stats = sync_index(
+                _config(data_dir, ("Mining",)),
+                notes=[_note(2, "犬", "dog", deck="Mining")],
+                embedder=FakeEmbedder("other"),
+            )
+            self.assertEqual(stats.total, 1)
+            self.assertEqual([row["word"] for row in _rows(data_dir)], ["犬"])
+            meta = json.loads((data_dir / "sync_meta.json").read_text(encoding="utf-8"))
+            self.assertEqual(meta["configuration"]["decks"], ["Mining"])
 
     def test_rebuild_reembeds_every_note(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

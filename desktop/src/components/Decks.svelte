@@ -5,7 +5,7 @@
 
 <section>
   <h2>1. Deck</h2>
-  <p class="hint">Includes nested decks. Other decks are left out.</p>
+  <p class="hint">Includes nested decks. Updating adds this deck to search. Decks you updated before stay searchable.</p>
   {#if decks.length === 0}
     <p>Open Anki and refresh.</p>
   {:else}

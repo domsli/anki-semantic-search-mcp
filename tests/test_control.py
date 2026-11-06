@@ -1,9 +1,10 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from anki_semantic_search.config import load_config, save_settings
-from anki_semantic_search.control import selected_decks
+from anki_semantic_search.config import Config, FieldMap, load_config, save_settings
+from anki_semantic_search.control import list_note_types, selected_decks
 
 
 class DefaultConfigTests(unittest.TestCase):
@@ -89,6 +90,45 @@ class SelectedDeckTests(unittest.TestCase):
 
     def test_only_the_built_in_deck_is_used_when_it_is_the_only_one(self) -> None:
         self.assertEqual(selected_decks(["Default"], ["Japanese"]), ["Default"])
+
+
+class NoteTypeRoleTests(unittest.TestCase):
+    def _config(self, note_types: dict[str, FieldMap]) -> Config:
+        return Config(
+            anki_url="http://127.0.0.1:8765",
+            anki_api_key=None,
+            decks=("Japanese",),
+            embedding_model="BAAI/bge-m3",
+            host="127.0.0.1",
+            port=8000,
+            data_dir=Path("data"),
+            fields=FieldMap(word=("Front",), definition=("Back",), skip=("Audio",)),
+            note_types=note_types,
+        )
+
+    def _list(self, config: Config) -> dict:
+        client = mock.MagicMock()
+        client.__enter__.return_value.note_types_in_decks.return_value = [
+            {"name": "Basic", "fields": ["Front", "Back", "Audio", "Notes"]}
+        ]
+        with mock.patch("anki_semantic_search.control.AnkiClient", return_value=client):
+            return list_note_types(config, ["Japanese"])["note_types"][0]
+
+    def test_default_card_type_shows_the_default_roles(self) -> None:
+        item = self._list(self._config({}))
+        expected = {"Front": "word", "Back": "definition", "Audio": "skip", "Notes": "extra"}
+        self.assertFalse(item["mapped"])
+        self.assertEqual(item["roles"], expected)
+        self.assertEqual(item["default_roles"], expected)
+
+    def test_custom_card_type_keeps_the_defaults_for_reset(self) -> None:
+        item = self._list(self._config({"Basic": FieldMap(word=("Back",), definition=("Front",))}))
+        self.assertTrue(item["mapped"])
+        self.assertEqual(
+            item["roles"],
+            {"Front": "definition", "Back": "word", "Audio": "unassigned", "Notes": "unassigned"},
+        )
+        self.assertEqual(item["default_roles"]["Front"], "word")
 
 
 if __name__ == "__main__":
